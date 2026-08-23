@@ -1,8 +1,9 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.validation import validate_tool_call
+from tools.system import get_system_diagnostics
 
-MAX_ITERATIONS = 6   # hard cap on tool calls per user turn
-MAX_RETRIES = 2       # per tool name, before giving up on it for this turn
+MAX_ITERATIONS = 6
+MAX_RETRIES = 2
 
 
 def add(a, b):
@@ -11,6 +12,7 @@ def add(a, b):
 
 TOOL_REGISTRY = {
     "add": add,
+    "get_system_diagnostics": get_system_diagnostics,
 }
 
 TOOL_SCHEMAS = [
@@ -28,7 +30,23 @@ TOOL_SCHEMAS = [
                 "required": ["a", "b"],
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_system_diagnostics",
+            "description": (
+                "Get current system diagnostics: CPU usage and core count, "
+                "RAM total/used/percent, per-drive disk space, and OS "
+                "name/version/build/uptime. No arguments needed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]
 
 

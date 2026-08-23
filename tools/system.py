@@ -1,0 +1,97 @@
+import subprocess
+import json
+import psutil
+from datetime import datetime, timedelta
+
+
+def get_system_diagnostics():
+    cpu = _get_cpu_info()
+    ram = _get_ram_info()
+    disks = _get_disk_info()
+    os_info = _get_os_info()
+
+    return {
+        "cpu": cpu,
+        "ram": ram,
+        "disks": disks,
+        "os": os_info,
+    }
+
+
+def _get_cpu_info():
+    return {
+        "usage_percent": psutil.cpu_percent(interval=0.5),
+        "core_count_physical": psutil.cpu_count(logical=False),
+        "core_count_logical": psutil.cpu_count(logical=True),
+    }
+
+
+def _get_ram_info():
+    mem = psutil.virtual_memory()
+    return {
+        "total_gb": round(mem.total / (1024 ** 3), 2),
+        "used_gb": round(mem.used / (1024 ** 3), 2),
+        "percent_used": mem.percent,
+    }
+
+
+def _get_disk_info():
+    disks = []
+    for part in psutil.disk_partitions(all=False):
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+        except PermissionError:
+            continue  # skip drives we can't read (e.g. empty CD drive)
+        disks.append({
+            "drive": part.device,
+            "total_gb": round(usage.total / (1024 ** 3), 2),
+            "used_gb": round(usage.used / (1024 ** 3), 2),
+            "free_gb": round(usage.free / (1024 ** 3), 2),
+            "percent_used": usage.percent,
+        })
+    return disks
+
+
+def _get_os_info():
+    # psutil doesn't give OS build/version directly -- pull that via
+    # PowerShell instead, with a timeout in case it hangs
+    try:
+        result = subprocess.run(
+            [
+                "powershell", "-Command",
+                "Get-CimInstance Win32_OperatingSystem | "
+                "Select-Object Caption, Version, BuildNumber, LastBootUpTime | "
+                "ConvertTo-Json"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            return {"error": f"PowerShell call failed: {result.stderr.strip()}"}
+
+        data = json.loads(result.stdout)
+
+        uptime = "unknown"
+        last_boot_raw = data.get("LastBootUpTime")
+        if last_boot_raw:
+            # WMI dates come back as .NET JSON date format: /Date(1699999999000)/
+            try:
+                millis = int(last_boot_raw.strip("/Date()"))
+                boot_time = datetime.fromtimestamp(millis / 1000)
+                delta = datetime.now() - boot_time
+                uptime = str(timedelta(seconds=int(delta.total_seconds())))
+            except (ValueError, TypeError):
+                pass
+
+        return {
+            "name": data.get("Caption", "unknown"),
+            "version": data.get("Version", "unknown"),
+            "build": data.get("BuildNumber", "unknown"),
+            "uptime": uptime,
+        }
+
+    except subprocess.TimeoutExpired:
+        return {"error": "PowerShell call timed out"}
+    except (json.JSONDecodeError, Exception) as e:
+        return {"error": f"failed to parse OS info: {e}"}
