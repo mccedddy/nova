@@ -2,6 +2,19 @@ import subprocess
 import json
 import os
 import time
+from datetime import datetime
+
+# common temp/cache path fragments -- kept as a constant so it's easy to
+# extend later without touching the function logic
+TEMP_CACHE_PATTERNS = [
+    r"\appdata\local\temp",
+    r"\temp",
+    r"\cache",
+    r"\crashdumps",
+    r"\appdata\local\microsoft\windows\inetcache",
+    r"\appdata\local\google\chrome\user data\default\cache",
+    r"\appdata\local\bravesoftware\brave-browser\user data\default\cache",
+]
 
 DEFAULT_TIMEOUT = 20  # seconds -- hard cap so a huge search can't hang forever
 MAX_RESULTS = 100
@@ -194,3 +207,47 @@ def _get_largest_items(path, timeout):
         })
 
     return {"items": items, "truncated_by_time": False}
+
+def analyze_file_relevance(path):
+    if not os.path.exists(path):
+        return {"error": f"Path does not exist: {path}"}
+
+    try:
+        stat = os.stat(path)
+    except OSError as e:
+        return {"error": f"Failed to read file info: {e}"}
+
+    last_accessed = datetime.fromtimestamp(stat.st_atime)
+    last_modified = datetime.fromtimestamp(stat.st_mtime)
+    now = datetime.now()
+
+    path_lower = path.lower()
+    in_temp_cache_path = any(pattern in path_lower for pattern in TEMP_CACHE_PATTERNS)
+
+    locked = _check_if_locked(path)
+
+    return {
+        "path": path,
+        "days_since_accessed": (now - last_accessed).days,
+        "days_since_modified": (now - last_modified).days,
+        "in_temp_or_cache_path": in_temp_cache_path,
+        "appears_locked_by_another_process": locked,
+        "size_mb": round(stat.st_size / (1024 ** 2), 3) if os.path.isfile(path) else "n/a (folder)",
+    }
+
+
+def _check_if_locked(path):
+    # imperfect but simple: try to open exclusively, catch PermissionError.
+    # Known gap (per the plan) -- doesn't identify WHICH process holds the
+    # lock, and won't catch every locking scenario. Good enough for v1.
+    if os.path.isdir(path):
+        return "n/a (folder)"
+
+    try:
+        with open(path, "r+b"):
+            pass
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return "unknown"  # e.g. file vanished between the exists check and here

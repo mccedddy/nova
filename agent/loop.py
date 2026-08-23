@@ -7,6 +7,7 @@ from tools.registry import query_registry
 from tools.registry import query_registry, list_installed_apps
 from tools.filesystem import search_files
 from tools.filesystem import search_files, get_folder_size
+from tools.filesystem import search_files, get_folder_size, analyze_file_relevance
 
 MAX_ITERATIONS = 10
 MAX_RETRIES = 2
@@ -27,6 +28,7 @@ TOOL_REGISTRY = {
     "list_installed_apps": list_installed_apps,
     "search_files": search_files,
     "get_folder_size": get_folder_size,
+    "analyze_file_relevance": analyze_file_relevance,
 }
 
 TOOL_SCHEMAS = [
@@ -231,6 +233,31 @@ TOOL_SCHEMAS = [
                     "path": {
                         "type": "string",
                         "description": "Full path to the folder to measure, e.g. 'C:\\\\Users\\\\you\\\\Downloads'",
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_file_relevance",
+            "description": (
+                "Get informational signals about a specific file or folder to "
+                "help assess whether it looks unused: days since last accessed, "
+                "days since last modified, whether it's in a typical temp/cache "
+                "path, and whether it appears locked by another process. This "
+                "tool does NOT determine or claim whether something is safe to "
+                "delete -- it only reports raw signals for you to weigh and "
+                "explain to the user, who makes the actual judgment."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Full path to the file or folder to analyze",
                     },
                 },
                 "required": ["path"],
