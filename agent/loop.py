@@ -1,9 +1,9 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
+from agent.validation import validate_tool_call
 
-MAX_ITERATIONS = 6  # hard cap so a confused model can't loop forever
+MAX_ITERATIONS = 6   # hard cap on tool calls per user turn
+MAX_RETRIES = 2       # per tool name, before giving up on it for this turn
 
-
-# --- fake tool for Phase 1 (proves the loop works before real tools exist) ---
 
 def add(a, b):
     return a + b
@@ -34,19 +34,18 @@ TOOL_SCHEMAS = [
 
 def run_turn(user_input, messages):
     messages.append({"role": "user", "content": user_input})
+    failure_counts = {}  # tracks validation/execution failures per tool name this turn
 
     for _ in range(MAX_ITERATIONS):
         try:
             response = chat(messages, tools=TOOL_SCHEMAS)
         except OllamaUnavailableError as e:
-            # don't leave the failed user message in history -- nothing
-            # actually happened, so the next real turn shouldn't reference it
             messages.pop()
             return f"⚠ {e}"
 
         tool_calls = extract_tool_calls(response)
 
-        if not tool_calls:
+        if not tool_calls:  
             final_text = get_final_text(response)
             messages.append({"role": "assistant", "content": final_text})
             return final_text
@@ -59,14 +58,21 @@ def run_turn(user_input, messages):
 
             print(f"\u2192 calling {name}({args})")
 
-            func = TOOL_REGISTRY.get(name)
-            if func is None:
-                result = f"error: unknown tool '{name}'"
-            else:
+            ok, validated = validate_tool_call(name, args, TOOL_REGISTRY, TOOL_SCHEMAS)
+
+            if ok:
                 try:
-                    result = func(**args)
+                    result = TOOL_REGISTRY[name](**validated)
                 except Exception as e:
-                    result = f"error: {e}"
+                    ok = False
+                    validated = str(e)
+
+            if not ok:
+                failure_counts[name] = failure_counts.get(name, 0) + 1
+                if failure_counts[name] > MAX_RETRIES:
+                    result = f"error: {validated} -- giving up on '{name}' after {MAX_RETRIES} retries"
+                else:
+                    result = f"error: {validated} -- please retry with corrected arguments"
 
             print(f"\u2190 result: {result}")
 

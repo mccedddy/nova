@@ -6,7 +6,6 @@ MODEL = "qwen3.5:9b"
 
 
 class OllamaUnavailableError(Exception):
-    # raised when Ollama can't be reached at all -- not running, wrong port, etc.
     pass
 
 
@@ -30,6 +29,13 @@ def chat(messages, tools=None, stream=False, timeout=120):
         raise OllamaUnavailableError(
             f"Ollama didn't respond within {timeout}s -- it may be overloaded or stuck."
         )
+    except requests.exceptions.HTTPError:
+        # surface Ollama's actual error body -- usually tells you exactly
+        # what it didn't like about the request (bad message shape, etc.)
+        detail = response.text[:500]
+        raise OllamaUnavailableError(
+            f"Ollama returned {response.status_code}: {detail}"
+        )
 
     return response.json()
 
@@ -47,12 +53,11 @@ def extract_tool_calls(response_json):
         name = func.get("name")
         args = func.get("arguments")
 
-        # arguments sometimes comes back as a JSON string instead of a dict
         if isinstance(args, str):
             try:
                 args = json.loads(args)
             except json.JSONDecodeError:
-                args = {"_raw": args}  # let validation.py flag this
+                args = {"_raw": args}
 
         extracted.append({"name": name, "arguments": args or {}})
 
