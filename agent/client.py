@@ -5,6 +5,11 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "qwen3.5:9b"
 
 
+class OllamaUnavailableError(Exception):
+    # raised when Ollama can't be reached at all -- not running, wrong port, etc.
+    pass
+
+
 def chat(messages, tools=None, stream=False, timeout=120):
     payload = {
         "model": MODEL,
@@ -14,8 +19,18 @@ def chat(messages, tools=None, stream=False, timeout=120):
     if tools:
         payload["tools"] = tools
 
-    response = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
-    response.raise_for_status()
+    try:
+        response = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError:
+        raise OllamaUnavailableError(
+            "Can't reach Ollama at localhost:11434. Is 'ollama serve' running?"
+        )
+    except requests.exceptions.Timeout:
+        raise OllamaUnavailableError(
+            f"Ollama didn't respond within {timeout}s -- it may be overloaded or stuck."
+        )
+
     return response.json()
 
 

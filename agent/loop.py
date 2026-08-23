@@ -1,4 +1,4 @@
-from agent.client import chat, extract_tool_calls, get_final_text
+from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 
 MAX_ITERATIONS = 6  # hard cap so a confused model can't loop forever
 
@@ -33,22 +33,24 @@ TOOL_SCHEMAS = [
 
 
 def run_turn(user_input, messages):
-    # messages is the running conversation history, passed in from main.py
-    # so it persists across turns (Phase 5 wants follow-up context to work)
     messages.append({"role": "user", "content": user_input})
 
     for _ in range(MAX_ITERATIONS):
-        response = chat(messages, tools=TOOL_SCHEMAS)
+        try:
+            response = chat(messages, tools=TOOL_SCHEMAS)
+        except OllamaUnavailableError as e:
+            # don't leave the failed user message in history -- nothing
+            # actually happened, so the next real turn shouldn't reference it
+            messages.pop()
+            return f"⚠ {e}"
+
         tool_calls = extract_tool_calls(response)
 
         if not tool_calls:
-            # no tool call -- model is giving its final answer
             final_text = get_final_text(response)
             messages.append({"role": "assistant", "content": final_text})
             return final_text
 
-        # model wants to call a tool -- record the assistant's tool call
-        # request in history, then execute it and feed the result back
         messages.append(response["message"])
 
         for call in tool_calls:
@@ -73,5 +75,4 @@ def run_turn(user_input, messages):
                 "content": str(result),
             })
 
-    # hit MAX_ITERATIONS without a final answer -- give up gracefully
     return "I couldn't complete that after several tool calls -- something may be wrong with my tool use."
