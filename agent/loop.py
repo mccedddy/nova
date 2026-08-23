@@ -4,6 +4,8 @@ from tools.system import get_system_diagnostics, get_gpu_driver_info
 from tools.processes import list_running_processes, get_network_connections
 from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_health
 from tools.registry import query_registry
+from tools.registry import query_registry, list_installed_apps
+from tools.filesystem import search_files
 
 MAX_ITERATIONS = 6
 MAX_RETRIES = 2
@@ -21,6 +23,8 @@ TOOL_REGISTRY = {
     "get_gpu_driver_info": get_gpu_driver_info,
     "get_disk_health": get_disk_health,
     "query_registry": query_registry,
+    "list_installed_apps": list_installed_apps,
+    "search_files": search_files,
 }
 
 TOOL_SCHEMAS = [
@@ -160,6 +164,51 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["key_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_installed_apps",
+            "description": (
+                "List installed applications with name, version, publisher, "
+                "and install date. Reads both 64-bit and 32-bit installed "
+                "programs, and both machine-wide and per-user installs. "
+                "Read-only -- does not uninstall or modify anything."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_files",
+            "description": (
+                "Search for files by name pattern (supports wildcards like "
+                "'*.log' or 'report*.docx'). If root_path is omitted, searches "
+                "common locations (user profile, Program Files) rather than "
+                "the whole C: drive. Pass root_path explicitly for a narrower "
+                "or broader search. Results are capped and time-limited -- "
+                "check truncated_by_time/truncated_by_count in the response."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Filename pattern to match, e.g. '*.pdf' or 'invoice*.xlsx'",
+                    },
+                    "root_path": {
+                        "type": "string",
+                        "description": "Optional starting directory. Omit to search default common locations.",
+                    },
+                },
+                "required": ["pattern"],
             },
         },
     },

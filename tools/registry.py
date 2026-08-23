@@ -13,6 +13,12 @@ ALLOWED_HIVES = {
     "HKEY_USERS": winreg.HKEY_USERS,
 }
 
+UNINSTALL_PATHS = [
+    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+    (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+]
+
 MAX_VALUES = 50
 MAX_SUBKEYS = 50
 
@@ -85,3 +91,73 @@ def _read_subkeys(key):
         except OSError:
             break  # no more subkeys
     return {"items": items, "truncated": truncated}
+
+def list_installed_apps():
+    # reads HKLM + HKLM WOW6432Node (32-bit apps on 64-bit Windows -- easy
+    # to forget, doubles the app list if missed) + HKCU uninstall keys.
+    # read-only -- never touches the uninstall string itself.
+    apps = []
+    errors = []
+
+    for hive, path in UNINSTALL_PATHS:
+        try:
+            with winreg.OpenKey(hive, path, 0, winreg.KEY_READ) as uninstall_key:
+                i = 0
+                while True:
+                    try:
+                        subkey_name = winreg.EnumKey(uninstall_key, i)
+                    except OSError:
+                        break  # no more subkeys
+
+                    app = _read_app_entry(uninstall_key, subkey_name)
+                    if app:  # skip entries with no DisplayName (usually system components)
+                        apps.append(app)
+                    i += 1
+
+        except FileNotFoundError:
+            continue  # this path just doesn't exist on this system, not an error
+        except PermissionError:
+            errors.append(f"Access denied reading {path}")
+        except OSError as e:
+            errors.append(f"Failed to read {path}: {e}")
+
+    # sort alphabetically, dedupe by (name, version) in case the same app
+    # somehow appears in more than one hive
+    seen = set()
+    unique_apps = []
+    for app in sorted(apps, key=lambda a: a["name"].lower()):
+        key = (app["name"], app["version"])
+        if key not in seen:
+            seen.add(key)
+            unique_apps.append(app)
+
+    result = {"apps": unique_apps, "count": len(unique_apps)}
+    if errors:
+        result["errors"] = errors
+    return result
+
+
+def _read_app_entry(uninstall_key, subkey_name):
+    try:
+        with winreg.OpenKey(uninstall_key, subkey_name, 0, winreg.KEY_READ) as app_key:
+            name = _get_value(app_key, "DisplayName")
+            if not name:
+                return None  # skip entries with no display name -- usually
+                               # system components/updates, not real apps
+
+            return {
+                "name": name,
+                "version": _get_value(app_key, "DisplayVersion") or "unknown",
+                "publisher": _get_value(app_key, "Publisher") or "unknown",
+                "install_date": _get_value(app_key, "InstallDate") or "unknown",
+            }
+    except OSError:
+        return None  # subkey vanished or unreadable mid-scan -- skip it
+
+
+def _get_value(key, name):
+    try:
+        value, _ = winreg.QueryValueEx(key, name)
+        return value
+    except FileNotFoundError:
+        return None
