@@ -30,6 +30,9 @@ Only use web_search when you don't recognize something from your own knowledge (
 DON'T OVER-SEARCH:
 If you've already searched 2-3 times for the same underlying question and results are inconclusive or conflicting, stop and give the user your best answer based on what you found, clearly noting the uncertainty -- don't keep reformulating the same search hoping for a cleaner result.
 
+WHEN USING A TOOL:
+If you need to use a tool, put one short, user-facing sentence in your response content describing what you are checking. Do not reveal private chain-of-thought or lengthy internal reasoning.
+
 STYLE:
 Keep answers direct and readable. Use tables or bullet points only when they genuinely help (e.g. comparing several items), not for simple one-fact answers. Avoid excessive emoji."""
 
@@ -316,7 +319,23 @@ TOOL_SCHEMAS = [
 ]
 
 
-def run_turn(user_input, messages):
+TOOL_PROGRESS_MESSAGES = {
+    "add": "Calculating...",
+    "get_system_diagnostics": "Analyzing system diagnostics...",
+    "list_running_processes": "Checking running processes...",
+    "get_network_connections": "Checking network connections...",
+    "get_gpu_driver_info": "Analyzing GPU and driver information...",
+    "get_disk_health": "Checking disk health...",
+    "query_registry": "Inspecting the Windows registry...",
+    "list_installed_apps": "Checking installed applications...",
+    "search_files": "Searching files...",
+    "get_folder_size": "Calculating folder size...",
+    "analyze_file_relevance": "Analyzing file information...",
+    "web_search": "Searching the web for information...",
+}
+
+
+def run_turn(user_input, messages, show_debug_tools=False):
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}  # tracks validation/execution failures per tool name this turn
 
@@ -335,12 +354,18 @@ def run_turn(user_input, messages):
             return final_text
 
         messages.append(response["message"])
+        model_status = response.get("message", {}).get("content", "").strip()
+        if model_status:
+            print(f"\n{model_status}")
 
         for call in tool_calls:
             name = call["name"]
             args = call["arguments"]
 
-            print(f"\u2192 calling {name}({args})")
+            if not model_status:
+                print(f"\n{TOOL_PROGRESS_MESSAGES.get(name, 'Working...')}")
+            if show_debug_tools:
+                print(f"\u2192 calling {name}({args})")
 
             ok, validated = validate_tool_call(name, args, TOOL_REGISTRY, TOOL_SCHEMAS)
 
@@ -358,7 +383,8 @@ def run_turn(user_input, messages):
                 else:
                     result = f"error: {validated} -- please retry with corrected arguments"
 
-            print(f"\u2190 result: {result}")
+            if show_debug_tools:
+                print(f"\u2190 result: {result}")
 
             messages.append({
                 "role": "tool",
