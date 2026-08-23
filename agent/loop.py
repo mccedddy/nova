@@ -6,8 +6,9 @@ from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_h
 from tools.registry import query_registry
 from tools.registry import query_registry, list_installed_apps
 from tools.filesystem import search_files
+from tools.filesystem import search_files, get_folder_size
 
-MAX_ITERATIONS = 6
+MAX_ITERATIONS = 10
 MAX_RETRIES = 2
 
 
@@ -25,6 +26,7 @@ TOOL_REGISTRY = {
     "query_registry": query_registry,
     "list_installed_apps": list_installed_apps,
     "search_files": search_files,
+    "get_folder_size": get_folder_size,
 }
 
 TOOL_SCHEMAS = [
@@ -209,6 +211,29 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_folder_size",
+            "description": (
+                "Get the total size of a folder (recursive) plus a breakdown "
+                "of its 10 largest immediate subfolders/files by size. Use "
+                "this to find what's taking up space inside a specific "
+                "directory. Requires a real, already-known path -- use "
+                "search_files first if you don't know the exact path."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Full path to the folder to measure, e.g. 'C:\\\\Users\\\\you\\\\Downloads'",
+                    },
+                },
+                "required": ["path"],
             },
         },
     },

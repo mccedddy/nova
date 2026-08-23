@@ -97,3 +97,100 @@ def _search_one_root(root, pattern, timeout):
         })
 
     return matches, False
+
+def get_folder_size(path):
+    # recursive total size + breakdown of largest subfolders/files.
+    # uses PowerShell (faster than Python's os.walk for large trees, same
+    # reasoning as search_files) with the same time-budget safety net.
+    if not os.path.exists(path):
+        return {"error": f"Path does not exist: {path}"}
+
+    start_time = time.time()
+
+    total = _get_total_size(path, DEFAULT_TIMEOUT)
+    if total is None:
+        return {"error": f"Timed out calculating size for {path}"}
+
+    remaining_time = max(DEFAULT_TIMEOUT - (time.time() - start_time), 5)
+    largest_items = _get_largest_items(path, remaining_time)
+
+    return {
+        "path": path,
+        "total_size_gb": round(total / (1024 ** 3), 2),
+        "largest_items": largest_items["items"],
+        "largest_items_truncated_by_time": largest_items["truncated_by_time"],
+    }
+
+
+def _get_total_size(path, timeout):
+    ps_command = (
+        f"(Get-ChildItem -Path '{path}' -Recurse -File "
+        f"-ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell", "-Command", ps_command],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+
+    output = result.stdout.strip()
+    if not output:
+        return 0
+    try:
+        return int(float(output))
+    except ValueError:
+        return 0
+
+
+def _get_largest_items(path, timeout):
+    # top 10 largest immediate subfolders + files, by total size --
+    # gives a "what's actually taking up space here" breakdown without
+    # walking the whole tree a second time for every nested file
+    ps_command = (
+        f"Get-ChildItem -Path '{path}' -ErrorAction SilentlyContinue | "
+        f"ForEach-Object {{ "
+        f"  if ($_.PSIsContainer) {{ "
+        f"    $size = (Get-ChildItem $_.FullName -Recurse -File -ErrorAction SilentlyContinue | "
+        f"      Measure-Object -Property Length -Sum).Sum; "
+        f"    [PSCustomObject]@{{ Name=$_.FullName; SizeBytes=$size; IsFolder=$true }} "
+        f"  }} else {{ "
+        f"    [PSCustomObject]@{{ Name=$_.FullName; SizeBytes=$_.Length; IsFolder=$false }} "
+        f"  }} "
+        f"}} | Sort-Object SizeBytes -Descending | Select-Object -First 10 | ConvertTo-Json"
+    )
+
+    try:
+        result = subprocess.run(
+            ["powershell", "-Command", ps_command],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"items": [], "truncated_by_time": True}
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return {"items": [], "truncated_by_time": False}
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"items": [], "truncated_by_time": False}
+
+    if isinstance(data, dict):
+        data = [data]
+
+    items = []
+    for entry in data:
+        size_bytes = entry.get("SizeBytes") or 0
+        items.append({
+            "path": entry.get("Name", "unknown"),
+            "type": "folder" if entry.get("IsFolder") else "file",
+            "size_gb": round(size_bytes / (1024 ** 3), 3),
+        })
+
+    return {"items": items, "truncated_by_time": False}
