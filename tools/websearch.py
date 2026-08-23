@@ -1,6 +1,6 @@
 from ddgs import DDGS
 
-MAX_RESULTS = 5
+MAX_RESULTS = 8 
 TIMEOUT = 15
 
 # try these backends in order -- if one fails (rate limited, network
@@ -29,7 +29,7 @@ def web_search(query):
                 results = [
                     {
                         "title": r.get("title", "unknown"),
-                        "snippet": r.get("body", "")[:300],  # trim long snippets
+                        "snippet": r.get("body", "")[:800],  # trim long snippets
                         "url": r.get("href", "unknown"),
                     }
                     for r in raw_results
