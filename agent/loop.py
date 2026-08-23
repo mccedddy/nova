@@ -3,6 +3,7 @@ from agent.validation import validate_tool_call
 from tools.system import get_system_diagnostics, get_gpu_driver_info
 from tools.processes import list_running_processes, get_network_connections
 from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_health
+from tools.registry import query_registry
 
 MAX_ITERATIONS = 6
 MAX_RETRIES = 2
@@ -19,6 +20,7 @@ TOOL_REGISTRY = {
     "get_network_connections": get_network_connections,
     "get_gpu_driver_info": get_gpu_driver_info,
     "get_disk_health": get_disk_health,
+    "query_registry": query_registry,
 }
 
 TOOL_SCHEMAS = [
@@ -135,6 +137,29 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {},
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_registry",
+            "description": (
+                "Read a Windows registry key: its values and subkey names. "
+                "key_path must start with one of HKLM, HKCU, HKCR, or HKU, "
+                "e.g. 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion'. "
+                "Results are capped -- if truncated, narrow the path further "
+                "rather than reading a huge key like the hive root."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key_path": {
+                        "type": "string",
+                        "description": "Full registry path including root hive, e.g. 'HKLM\\Software\\Microsoft'",
+                    },
+                },
+                "required": ["key_path"],
             },
         },
     },
