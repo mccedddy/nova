@@ -8,6 +8,7 @@ from tools.registry import query_registry, list_installed_apps
 from tools.filesystem import search_files
 from tools.filesystem import search_files, get_folder_size
 from tools.filesystem import search_files, get_folder_size, analyze_file_relevance
+from tools.websearch import web_search
 
 MAX_ITERATIONS = 10
 MAX_RETRIES = 2
@@ -29,6 +30,7 @@ TOOL_REGISTRY = {
     "search_files": search_files,
     "get_folder_size": get_folder_size,
     "analyze_file_relevance": analyze_file_relevance,
+    "web_search": web_search,
 }
 
 TOOL_SCHEMAS = [
@@ -261,6 +263,30 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web for current information. Use this ONLY when "
+                "you don't recognize something from your own knowledge -- an "
+                "unfamiliar process name, file, error message, or to check "
+                "the latest version of something like a GPU driver. Returns "
+                "a handful of summarized results (title, snippet, url), not "
+                "full page content."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query",
+                    },
+                },
+                "required": ["query"],
             },
         },
     },
