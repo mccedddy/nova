@@ -1,7 +1,7 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.validation import validate_tool_call
 from tools.system import get_system_diagnostics
-from tools.processes import list_running_processes
+from tools.processes import list_running_processes, get_network_connections
 
 MAX_ITERATIONS = 6
 MAX_RETRIES = 2
@@ -15,6 +15,7 @@ TOOL_REGISTRY = {
     "add": add,
     "get_system_diagnostics": get_system_diagnostics,
     "list_running_processes": list_running_processes,
+    "get_network_connections": get_network_connections,
 }
 
 TOOL_SCHEMAS = [
@@ -70,6 +71,30 @@ TOOL_SCHEMAS = [
                     "sort_by": {
                         "type": "string",
                         "description": "Sort order: 'memory' (default, highest first) or 'name' (alphabetical)",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_network_connections",
+            "description": (
+                "List active network connections: which process owns each "
+                "one, local/remote address and port, and connection status. "
+                "Established connections are shown first. Use this to answer "
+                "questions about what's using the network, what's connected "
+                "to what, or open ports. May report an access-denied error "
+                "if not running as Administrator."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max number of connections to return (default 30)",
                     },
                 },
                 "required": [],

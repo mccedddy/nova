@@ -1,5 +1,5 @@
-# scratch_processes_check.py
-from tools.processes import list_running_processes
+# scratch_network_check.py
+from tools.processes import get_network_connections
 import json
 
-print(json.dumps(list_running_processes(), indent=2))
+print(json.dumps(get_network_connections(), indent=2))
