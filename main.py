@@ -1,8 +1,8 @@
-from agent.loop import run_turn
+from agent.loop import run_turn, SYSTEM_PROMPT
 
 def main():
     print("N.O.V.A. -- type 'exit' or 'quit' to leave.\n")
-    messages = []  # in-memory conversation history, session-only per SAFETY.md scope
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     while True:
         try:
