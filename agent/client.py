@@ -14,6 +14,9 @@ def chat(messages, tools=None, stream=False, timeout=120):
         "model": MODEL,
         "messages": messages,
         "stream": stream,
+        "options": {
+            "num_ctx": 8192,
+        },
     }
     if tools:
         payload["tools"] = tools

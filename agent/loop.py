@@ -1,6 +1,7 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.validation import validate_tool_call
 from tools.system import get_system_diagnostics
+from tools.processes import list_running_processes
 
 MAX_ITERATIONS = 6
 MAX_RETRIES = 2
@@ -13,6 +14,7 @@ def add(a, b):
 TOOL_REGISTRY = {
     "add": add,
     "get_system_diagnostics": get_system_diagnostics,
+    "list_running_processes": list_running_processes,
 }
 
 TOOL_SCHEMAS = [
@@ -43,6 +45,33 @@ TOOL_SCHEMAS = [
             "parameters": {
                 "type": "object",
                 "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_running_processes",
+            "description": (
+                "List currently running processes with PID, name, memory "
+                "usage in MB, and executable path. Results are sorted and "
+                "capped by default since the system may have 200+ processes "
+                "running. Use this to answer questions about what's running, "
+                "what's using memory, or to look up a process by name."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max number of processes to return (default 30)",
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "description": "Sort order: 'memory' (default, highest first) or 'name' (alphabetical)",
+                    },
+                },
                 "required": [],
             },
         },
