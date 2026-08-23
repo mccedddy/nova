@@ -2,6 +2,7 @@ from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavail
 from agent.validation import validate_tool_call
 from tools.system import get_system_diagnostics, get_gpu_driver_info
 from tools.processes import list_running_processes, get_network_connections
+from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_health
 
 MAX_ITERATIONS = 6
 MAX_RETRIES = 2
@@ -17,6 +18,7 @@ TOOL_REGISTRY = {
     "list_running_processes": list_running_processes,
     "get_network_connections": get_network_connections,
     "get_gpu_driver_info": get_gpu_driver_info,
+    "get_disk_health": get_disk_health,
 }
 
 TOOL_SCHEMAS = [
@@ -112,6 +114,22 @@ TOOL_SCHEMAS = [
                 "questions about GPU driver version or whether a driver "
                 "update may be needed (pair with web_search to check the "
                 "latest available version once that tool exists)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_disk_health",
+            "description": (
+                "Get SMART health status for each physical disk: health status "
+                "(Healthy/Warning/Unhealthy), operational status, media type "
+                "(SSD/HDD), and size. May require running as Administrator."
             ),
             "parameters": {
                 "type": "object",

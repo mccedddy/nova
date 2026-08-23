@@ -186,3 +186,48 @@ def _try_nvidia_smi():
         }
     except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
         return None
+
+def get_disk_health():
+    try:
+        result = subprocess.run(
+            [
+                "powershell", "-Command",
+                "Get-PhysicalDisk | Select-Object DeviceId, FriendlyName, "
+                "MediaType, HealthStatus, OperationalStatus, Size | "
+                "ConvertTo-Json"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            if "access" in stderr.lower() or "denied" in stderr.lower():
+                return {
+                    "error": "Access denied -- disk health checks require running as Administrator."
+                }
+            return {"error": f"PowerShell call failed: {stderr}"}
+
+        data = json.loads(result.stdout)
+        if isinstance(data, dict):
+            data = [data]
+
+        disks = []
+        for entry in data:
+            size_bytes = entry.get("Size")
+            disks.append({
+                "device_id": entry.get("DeviceId", "unknown"),
+                "name": entry.get("FriendlyName", "unknown"),
+                "media_type": entry.get("MediaType", "unknown"),  # SSD/HDD
+                "health_status": entry.get("HealthStatus", "unknown"),
+                "operational_status": entry.get("OperationalStatus", "unknown"),
+                "size_gb": round(size_bytes / (1024 ** 3), 2) if size_bytes else "unknown",
+            })
+
+        return {"disks": disks}
+
+    except subprocess.TimeoutExpired:
+        return {"error": "PowerShell call timed out"}
+    except (json.JSONDecodeError, Exception) as e:
+        return {"error": f"failed to parse disk health info: {e}"}
