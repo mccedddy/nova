@@ -1,6 +1,6 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.validation import validate_tool_call
-from tools.system import get_system_diagnostics
+from tools.system import get_system_diagnostics, get_gpu_driver_info
 from tools.processes import list_running_processes, get_network_connections
 
 MAX_ITERATIONS = 6
@@ -16,6 +16,7 @@ TOOL_REGISTRY = {
     "get_system_diagnostics": get_system_diagnostics,
     "list_running_processes": list_running_processes,
     "get_network_connections": get_network_connections,
+    "get_gpu_driver_info": get_gpu_driver_info,
 }
 
 TOOL_SCHEMAS = [
@@ -97,6 +98,24 @@ TOOL_SCHEMAS = [
                         "description": "Max number of connections to return (default 30)",
                     },
                 },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_gpu_driver_info",
+            "description": (
+                "Get GPU model, driver version, driver date, and VRAM for "
+                "each graphics card in the system. Use this to answer "
+                "questions about GPU driver version or whether a driver "
+                "update may be needed (pair with web_search to check the "
+                "latest available version once that tool exists)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
                 "required": [],
             },
         },

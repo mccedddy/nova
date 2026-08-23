@@ -95,3 +95,74 @@ def _get_os_info():
         return {"error": "PowerShell call timed out"}
     except (json.JSONDecodeError, Exception) as e:
         return {"error": f"failed to parse OS info: {e}"}
+
+def get_gpu_driver_info():
+    # GPU model + driver version via WMI. If NVIDIA, also try nvidia-smi
+    # and prefer it when available since it's usually more precise/current
+    # than what WMI reports.
+    gpus = _get_gpu_info_wmi()
+    nvidia_info = _try_nvidia_smi()
+
+    if nvidia_info:
+        # merge: prefer nvidia-smi's driver version for any GPU that
+        # matches by name, since it's typically more accurate/up to date
+        for gpu in gpus:
+            if "nvidia" in gpu["name"].lower():
+                gpu["driver_version_nvidia_smi"] = nvidia_info.get("driver_version")
+
+    return {"gpus": gpus}
+
+def _get_gpu_info_wmi():
+    try:
+        result = subprocess.run(
+            [
+                "powershell", "-Command",
+                "Get-CimInstance Win32_VideoController | "
+                "Select-Object Name, DriverVersion, DriverDate, AdapterRAM | "
+                "ConvertTo-Json"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            return [{"error": f"PowerShell call failed: {result.stderr.strip()}"}]
+
+        data = json.loads(result.stdout)
+        # WMI returns a single dict if there's only one GPU, or a list if
+        # there are multiple -- normalize to always be a list
+        if isinstance(data, dict):
+            data = [data]
+
+        gpus = []
+        for entry in data:
+            ram_bytes = entry.get("AdapterRAM")
+            gpus.append({
+                "name": entry.get("Name", "unknown"),
+                "driver_version": entry.get("DriverVersion", "unknown"),
+                "driver_date": entry.get("DriverDate", "unknown"),
+                "vram_gb": round(ram_bytes / (1024 ** 3), 2) if ram_bytes else "unknown",
+            })
+        return gpus
+
+    except subprocess.TimeoutExpired:
+        return [{"error": "PowerShell call timed out"}]
+    except (json.JSONDecodeError, Exception) as e:
+        return [{"error": f"failed to parse GPU info: {e}"}]
+
+
+def _try_nvidia_smi():
+    # not all systems have an NVIDIA GPU / nvidia-smi installed -- this
+    # is optional, silently return None if it's not available
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        return {"driver_version": result.stdout.strip()}
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
