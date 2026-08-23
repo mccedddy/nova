@@ -1,0 +1,24 @@
+# venv
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs (tool-call debug output — may contain local paths, usernames)
+*.log
+logs/
+
+# Env / secrets (if you add a search API key later)
+.env
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
