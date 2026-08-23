@@ -97,18 +97,14 @@ def _get_os_info():
         return {"error": f"failed to parse OS info: {e}"}
 
 def get_gpu_driver_info():
-    # GPU model + driver version via WMI. If NVIDIA, also try nvidia-smi
-    # and prefer it when available since it's usually more precise/current
-    # than what WMI reports.
     gpus = _get_gpu_info_wmi()
     nvidia_info = _try_nvidia_smi()
 
     if nvidia_info:
-        # merge: prefer nvidia-smi's driver version for any GPU that
-        # matches by name, since it's typically more accurate/up to date
         for gpu in gpus:
             if "nvidia" in gpu["name"].lower():
                 gpu["driver_version_nvidia_smi"] = nvidia_info.get("driver_version")
+                gpu["vram_gb"] = nvidia_info.get("vram_gb", gpu["vram_gb"])  # override the unreliable WMI value
 
     return {"gpus": gpus}
 
@@ -165,4 +161,28 @@ def _try_nvidia_smi():
             return None
         return {"driver_version": result.stdout.strip()}
     except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+def _try_nvidia_smi():
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=driver_version,memory.total",
+                "--format=csv,noheader,nounits"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+
+        line = result.stdout.strip()
+        driver_version, vram_mb = [p.strip() for p in line.split(",")]
+        return {
+            "driver_version": driver_version,
+            "vram_gb": round(float(vram_mb) / 1024, 2),
+        }
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
         return None
