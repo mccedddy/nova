@@ -1,4 +1,4 @@
-from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
+from agent.client import chat_stream, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.validation import validate_tool_call
 from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_health
 from tools.processes import list_running_processes, get_network_connections
@@ -369,17 +369,28 @@ TOOL_PROGRESS_MESSAGES = {
     "get_folder_size": "Calculating folder size...",
     "analyze_file_relevance": "Analyzing file information...",
     "web_search": "Searching the web for information...",
+    "fetch_page": "Checking information from web...",
+    "get_approximate_location": "Checking location...",
 }
 
 
 def run_turn(user_input, messages, show_debug_tools=False):
     messages.append({"role": "user", "content": user_input})
-    failure_counts = {}  # tracks validation/execution failures per tool name this turn
+    failure_counts = {}
 
     for _ in range(MAX_ITERATIONS):
+        printed_anything = False
+
+        def on_token(piece):
+            nonlocal printed_anything
+            printed_anything = True
+            print(piece, end="", flush=True)
+
         try:
-            response = chat(messages, tools=TOOL_SCHEMAS)
+            response = chat_stream(messages, tools=TOOL_SCHEMAS, on_token=on_token)
         except OllamaUnavailableError as e:
+            if printed_anything:
+                print()  # close out any partial line
             messages.pop()
             return f"⚠ {e}"
 
@@ -388,27 +399,29 @@ def run_turn(user_input, messages, show_debug_tools=False):
         if not tool_calls:
             final_text = get_final_text(response)
             if not final_text.strip():
-                # model produced neither a tool call nor any text -- almost always
-                # means the context window filled up with tool results, leaving no
-                # room to generate a real answer. Fail loudly instead of silently.
+                if printed_anything:
+                    print()
                 return (
                     "⚠ I gathered information but ran out of room to summarize it "
                     "(too much data from the tool results). Try asking a more "
                     "specific question, like checking one folder or location at a time."
                 )
             messages.append({"role": "assistant", "content": final_text})
-            return final_text
+            print()  # newline after the streamed text
+            return ""  # already printed live -- nothing left for main.py to print
+
+        # tool call path: content, if any, was already streamed above as the
+        # "thinking out loud" status line; now execute the actual tool(s)
+        if printed_anything:
+            print()
 
         messages.append(response["message"])
-        model_status = response.get("message", {}).get("content", "").strip()
-        if model_status:
-            print(f"\n{model_status}")
 
         for call in tool_calls:
             name = call["name"]
             args = call["arguments"]
 
-            if not model_status:
+            if not printed_anything:
                 print(f"\n{TOOL_PROGRESS_MESSAGES.get(name, 'Working...')}")
             if show_debug_tools:
                 print(f"\u2192 calling {name}({args})")

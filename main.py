@@ -24,11 +24,14 @@ def main(show_debug_tools=False):
             continue
 
         answer = run_turn(
-            user_input,
-            messages,
-            show_debug_tools=show_debug_tools,
-        )
+        user_input,
+        messages,
+        show_debug_tools=show_debug_tools,
+    )
+    if answer:
         print(f"\n{answer}\n")
+    else:
+        print()  # just a trailing blank line after the streamed output
 
 
 if __name__ == "__main__":
