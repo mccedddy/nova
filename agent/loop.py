@@ -1,12 +1,8 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.validation import validate_tool_call
-from tools.system import get_system_diagnostics, get_gpu_driver_info
-from tools.processes import list_running_processes, get_network_connections
 from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_health
-from tools.registry import query_registry
+from tools.processes import list_running_processes, get_network_connections
 from tools.registry import query_registry, list_installed_apps
-from tools.filesystem import search_files
-from tools.filesystem import search_files, get_folder_size
 from tools.filesystem import search_files, get_folder_size, analyze_file_relevance
 from tools.websearch import web_search
 
@@ -32,6 +28,15 @@ If you've already searched 2-3 times for the same underlying question and result
 
 WHEN USING A TOOL:
 If you need to use a tool, put one short, user-facing sentence in your response content describing what you are checking. Do not reveal private chain-of-thought or lengthy internal reasoning.
+
+WHEN ASKED "WHERE IS X LOCATED":
+Give the user's actual real path, not a generic template with a placeholder like [username] or <YourUsername>. If you don't already know it, use search_files or check the environment for the real path before answering -- an answer with a placeholder isn't useful since the user still has to figure out the real value themselves.
+
+CHAINING TOOLS FOR "IS X OUTDATED" TYPE QUESTIONS:
+Questions like "is my driver outdated" or "is there a newer version" require TWO steps: first check the current version with the relevant tool, then use web_search to check the latest available version, then compare. Don't stop after only checking the local version and claim you can't determine if something is outdated -- web_search is available and is exactly the right tool for this. Never claim a tool or capability is unavailable/disabled unless you have actually tried using it and it failed.
+
+NEVER PRESENT SPECULATION AS FACT:
+Do not invent specific tool names, integrations, "things you set up earlier," or reasons why something is running unless they actually appear in a tool result or something the user told you in this conversation. If you want to speculate about why something might be running, clearly mark it as a guess (e.g. "possibly," "this could be related to") rather than stating it as something you observed or recall.
 
 STYLE:
 Keep answers direct and readable. Use tables or bullet points only when they genuinely help (e.g. comparing several items), not for simple one-fact answers. Avoid excessive emoji."""
@@ -221,12 +226,15 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "search_files",
             "description": (
-                "Search for files by name pattern (supports wildcards like "
-                "'*.log' or 'report*.docx'). If root_path is omitted, searches "
-                "common locations (user profile, Program Files) rather than "
-                "the whole C: drive. Pass root_path explicitly for a narrower "
-                "or broader search. Results are capped and time-limited -- "
-                "check truncated_by_time/truncated_by_count in the response."
+                "Search for files by name pattern using simple wildcards only "
+                "(* and ? -- no brace expansion like {a,b}, no regex). Examples: "
+                "'*.log', 'report*.docx'. root_path must be a real, concrete "
+                "directory path (e.g. 'C:\\\\Users\\\\yourname\\\\Downloads') -- "
+                "wildcards and placeholders like [username] are NOT supported in "
+                "root_path, only in pattern. If root_path is omitted, searches "
+                "common locations (user profile, Program Files) rather than the "
+                "whole C: drive. Results are capped and time-limited -- check "
+                "truncated_by_time/truncated_by_count in the response."
             ),
             "parameters": {
                 "type": "object",
@@ -348,8 +356,17 @@ def run_turn(user_input, messages, show_debug_tools=False):
 
         tool_calls = extract_tool_calls(response)
 
-        if not tool_calls:  
+        if not tool_calls:
             final_text = get_final_text(response)
+            if not final_text.strip():
+                # model produced neither a tool call nor any text -- almost always
+                # means the context window filled up with tool results, leaving no
+                # room to generate a real answer. Fail loudly instead of silently.
+                return (
+                    "⚠ I gathered information but ran out of room to summarize it "
+                    "(too much data from the tool results). Try asking a more "
+                    "specific question, like checking one folder or location at a time."
+                )
             messages.append({"role": "assistant", "content": final_text})
             return final_text
 

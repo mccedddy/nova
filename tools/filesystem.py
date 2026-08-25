@@ -17,7 +17,7 @@ TEMP_CACHE_PATTERNS = [
 ]
 
 DEFAULT_TIMEOUT = 20  # seconds -- hard cap so a huge search can't hang forever
-MAX_RESULTS = 100
+MAX_RESULTS = 40
 
 
 def search_files(pattern, root_path=None):
