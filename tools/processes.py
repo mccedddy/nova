@@ -36,6 +36,7 @@ def list_running_processes(limit=30, sort_by="memory"):
         "truncated": total_count > limit,
     }
 
+
 def get_network_connections(limit=30):
     # netstat-style: local/remote address, port, owning process.
     # psutil.net_connections() often needs admin rights on Windows --

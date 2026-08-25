@@ -77,14 +77,12 @@ def chat_stream(messages, tools=None, timeout=120, on_token=None):
     accumulated_content = ""
     final_tool_calls = None
     final_thinking = ""
-    last_chunk = {}
 
     try:
         for line in response.iter_lines():
             if not line:
                 continue
             chunk = json.loads(line)
-            last_chunk = chunk
 
             message = chunk.get("message", {})
 

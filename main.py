@@ -1,5 +1,7 @@
 from datetime import datetime
+
 from agent.loop import run_turn, SYSTEM_PROMPT
+
 
 def main(show_debug_tools=False):
     print("N.O.V.A. -- type 'exit' or 'quit' to leave.\n")
@@ -24,18 +26,19 @@ def main(show_debug_tools=False):
             continue
 
         answer = run_turn(
-        user_input,
-        messages,
-        show_debug_tools=show_debug_tools,
-    )
-    if answer:
-        print(f"\n{answer}\n")
-    else:
-        print()  # just a trailing blank line after the streamed output
+            user_input,
+            messages,
+            show_debug_tools=show_debug_tools,
+        )
+        if answer:
+            print(f"\n{answer}\n")
+        else:
+            print()  # just a trailing blank line after the streamed output
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Run the NOVA system inspection assistant.")
     parser.add_argument(
         "--debug-tools",

@@ -2,15 +2,17 @@ from ddgs import DDGS
 import requests
 from bs4 import BeautifulSoup
 
-MAX_RESULTS = 8 
+MAX_RESULTS = 8
 TIMEOUT = 15
 
 FETCH_TIMEOUT = 15
 MAX_PAGE_CHARS = 4000  # trimmed to keep context usage reasonable
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    )
 }
 
 # try these backends in order -- if one fails (rate limited, network
@@ -40,11 +42,11 @@ def web_search(query):
             if raw_results:
                 results = [
                     {
-                        "title": r.get("title", "unknown"),
-                        "snippet": r.get("body", "")[:800],  # trim long snippets
-                        "url": r.get("href", "unknown"),
+                        "title": result.get("title", "unknown"),
+                        "snippet": result.get("body", "")[:800],
+                        "url": result.get("href", "unknown"),
                     }
-                    for r in raw_results
+                    for result in raw_results
                 ]
                 return {"query": query, "backend_used": backend, "results": results}
 
