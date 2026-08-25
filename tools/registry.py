@@ -1,7 +1,6 @@
 import winreg
 
-# only these root hives are allowed -- registry keys can be huge or
-# sensitive, so we don't let the model wander outside known-safe roots
+# Restrict reads to the supported root hives.
 ALLOWED_HIVES = {
     "HKLM": winreg.HKEY_LOCAL_MACHINE,
     "HKEY_LOCAL_MACHINE": winreg.HKEY_LOCAL_MACHINE,
@@ -24,8 +23,7 @@ MAX_SUBKEYS = 50
 
 
 def query_registry(key_path):
-    # key_path expected like "HKLM\Software\Microsoft\Windows" or
-    # "HKCU\Software\..." -- first segment must be an allowed hive
+    # The first path segment identifies the allowed root hive.
     parts = key_path.strip("\\").split("\\", 1)
     if len(parts) < 1 or parts[0].upper() not in ALLOWED_HIVES:
         return {
@@ -72,7 +70,7 @@ def _read_values(key):
                 truncated = True
             i += 1
         except OSError:
-            break  # no more values
+            break
     return {"items": items, "truncated": truncated}
 
 
@@ -89,13 +87,11 @@ def _read_subkeys(key):
                 truncated = True
             i += 1
         except OSError:
-            break  # no more subkeys
+            break
     return {"items": items, "truncated": truncated}
 
 def list_installed_apps():
-    # reads HKLM + HKLM WOW6432Node (32-bit apps on 64-bit Windows -- easy
-    # to forget, doubles the app list if missed) + HKCU uninstall keys.
-    # read-only -- never touches the uninstall string itself.
+    # Include machine-wide, 32-bit, and per-user uninstall locations.
     apps = []
     errors = []
 
@@ -107,22 +103,21 @@ def list_installed_apps():
                     try:
                         subkey_name = winreg.EnumKey(uninstall_key, i)
                     except OSError:
-                        break  # no more subkeys
+                        break
 
                     app = _read_app_entry(uninstall_key, subkey_name)
-                    if app:  # skip entries with no DisplayName (usually system components)
+                    if app:
                         apps.append(app)
                     i += 1
 
         except FileNotFoundError:
-            continue  # this path just doesn't exist on this system, not an error
+            continue
         except PermissionError:
             errors.append(f"Access denied reading {path}")
         except OSError as e:
             errors.append(f"Failed to read {path}: {e}")
 
-    # sort alphabetically, dedupe by (name, version) in case the same app
-    # somehow appears in more than one hive
+    # Deduplicate entries that appear in multiple uninstall locations.
     seen = set()
     unique_apps = []
     for app in sorted(apps, key=lambda a: a["name"].lower()):
@@ -142,8 +137,7 @@ def _read_app_entry(uninstall_key, subkey_name):
         with winreg.OpenKey(uninstall_key, subkey_name, 0, winreg.KEY_READ) as app_key:
             name = _get_value(app_key, "DisplayName")
             if not name:
-                return None  # skip entries with no display name -- usually
-                               # system components/updates, not real apps
+                return None
 
             return {
                 "name": name,
@@ -152,7 +146,7 @@ def _read_app_entry(uninstall_key, subkey_name):
                 "install_date": _get_value(app_key, "InstallDate") or "unknown",
             }
     except OSError:
-        return None  # subkey vanished or unreadable mid-scan -- skip it
+        return None
 
 
 def _get_value(key, name):

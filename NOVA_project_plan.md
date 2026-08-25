@@ -35,7 +35,7 @@ nova/
     validation.py            # tool-call parsing/retry logic
   tools/
     __init__.py               # tool registry
-    schemas.py                  # JSON schemas for all tools (single source of truth)
+    tool_schemas.py             # JSON schemas for all tools (single source of truth)
     filesystem.py                 # search_files, get_folder_size, analyze_file_relevance
     registry.py                     # query_registry, list_installed_apps
     system.py                        # get_system_diagnostics, get_gpu_driver_info, get_disk_health
@@ -49,10 +49,10 @@ nova/
 
 ## Phase 1 — Minimal agent loop (no real tools yet)
 **Goal:** Build the ReAct-style loop with one fake tool, so the plumbing is proven before real complexity enters.
-**Done when:** You can ask "what's 2+2 using the calculator tool" and watch the model call a fake `add(a,b)` tool, get a result, and answer in natural language — end to end.
+**Done when:** You can ask a simple test question and watch the model call a fake tool, get a result, and answer in natural language — end to end.
 
 1. Write `client.py`: a function `chat(messages, tools)` that POSTs to `/api/chat` with `stream=False` and returns the parsed JSON.
-2. Write one dummy tool (e.g. `add(a: int, b: int)`) and its JSON schema by hand — this is your template for every real tool later.
+2. Write one dummy tool and its JSON schema by hand — this is your template for every real tool later.
 3. Write `loop.py`'s core cycle:
    - send user message + tool schemas to model
    - if response has `tool_calls`: execute the matching Python function, append result as a `tool` role message, loop again
@@ -132,7 +132,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 - Decide the trigger condition explicitly in the system prompt: "use web_search only when you don't recognize a process/file name from your own knowledge" — otherwise the model may reach for it constantly and slow every answer down.
 
 **For every tool above, repeat this mini-checklist:**
-- [ ] Write the JSON schema in `schemas.py`
+- [ ] Write the JSON schema in `tool_schemas.py`
 - [ ] Implement the function in isolation, test it directly (no model involved) with a real path/value on your machine
 - [ ] Register it in the tool registry
 - [ ] Ask the model a natural-language question that should trigger it, confirm it picks the right tool with sane arguments

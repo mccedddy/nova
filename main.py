@@ -1,5 +1,7 @@
 from datetime import datetime
-from agent.loop import run_turn, SYSTEM_PROMPT
+
+from agent.loop import run_turn
+from agent.prompts import SYSTEM_PROMPT
 
 def main(show_debug_tools=False):
     print("N.O.V.A. -- type 'exit' or 'quit' to leave.\n")

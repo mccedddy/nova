@@ -1,0 +1,15 @@
+TOOL_PROGRESS_MESSAGES = {
+    "get_system_diagnostics": "Analyzing system diagnostics...",
+    "list_running_processes": "Checking running processes...",
+    "get_network_connections": "Checking network connections...",
+    "get_gpu_driver_info": "Analyzing GPU and driver information...",
+    "get_disk_health": "Checking disk health...",
+    "query_registry": "Inspecting the Windows registry...",
+    "list_installed_apps": "Checking installed applications...",
+    "search_files": "Searching files...",
+    "get_folder_size": "Calculating folder size...",
+    "analyze_file_relevance": "Analyzing file information...",
+    "web_search": "Searching the web for information...",
+    "fetch_page": "Checking information from web...",
+    "get_approximate_location": "Checking location...",
+}

@@ -2,7 +2,6 @@ import psutil
 
 
 def list_running_processes(limit=30, sort_by="memory"):
-    # sort_by: "memory" (default) or "name"
     processes = []
 
     for proc in psutil.process_iter(["pid", "name", "memory_info", "exe"]):
@@ -16,9 +15,7 @@ def list_running_processes(limit=30, sort_by="memory"):
                 "exe_path": info["exe"] or "unknown",
             })
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            # process exited mid-scan, or we don't have permission to read
-            # it (common for system/other-user processes) -- skip silently,
-            # this isn't a real error, just an expected gap
+            # Processes can exit or become inaccessible during enumeration.
             continue
 
     if sort_by == "name":
@@ -37,10 +34,7 @@ def list_running_processes(limit=30, sort_by="memory"):
     }
 
 def get_network_connections(limit=30):
-    # netstat-style: local/remote address, port, owning process.
-    # psutil.net_connections() often needs admin rights on Windows --
-    # if it's denied, report that clearly instead of crashing, per the
-    # plan's explicit warning about this tool.
+    # Network enumeration may require Administrator privileges on Windows.
     try:
         conns = psutil.net_connections(kind="inet")
     except psutil.AccessDenied:
@@ -66,12 +60,11 @@ def get_network_connections(limit=30):
             "remote_address": f"{conn.raddr.ip}:{conn.raddr.port}" if conn.raddr else "none",
         })
 
-    # prioritize established connections (more likely what someone's
-    # asking about -- "what's using my network") over listening sockets
+    # Put active connections before listening sockets.
     results.sort(key=lambda c: c["status"] != "ESTABLISHED")
 
     total_count = len(results)
-    limit = min(limit, 40)  # same context-window safety cap as processes
+    limit = min(limit, 40)
     truncated = results[:limit]
 
     return {

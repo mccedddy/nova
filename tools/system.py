@@ -41,7 +41,7 @@ def _get_disk_info():
         try:
             usage = psutil.disk_usage(part.mountpoint)
         except PermissionError:
-            continue  # skip drives we can't read (e.g. empty CD drive)
+            continue
         disks.append({
             "drive": part.device,
             "total_gb": round(usage.total / (1024 ** 3), 2),
@@ -53,8 +53,7 @@ def _get_disk_info():
 
 
 def _get_os_info():
-    # psutil doesn't give OS build/version directly -- pull that via
-    # PowerShell instead, with a timeout in case it hangs
+    # PowerShell supplies Windows build information that psutil omits.
     try:
         result = subprocess.run(
             [
@@ -75,7 +74,7 @@ def _get_os_info():
         uptime = "unknown"
         last_boot_raw = data.get("LastBootUpTime")
         if last_boot_raw:
-            # WMI dates come back as .NET JSON date format: /Date(1699999999000)/
+            # WMI returns boot time in .NET JSON date format.
             try:
                 millis = int(last_boot_raw.strip("/Date()"))
                 boot_time = datetime.fromtimestamp(millis / 1000)
@@ -125,8 +124,7 @@ def _get_gpu_info_wmi():
             return [{"error": f"PowerShell call failed: {result.stderr.strip()}"}]
 
         data = json.loads(result.stdout)
-        # WMI returns a single dict if there's only one GPU, or a list if
-        # there are multiple -- normalize to always be a list
+        # Normalize the single-GPU and multi-GPU response shapes.
         if isinstance(data, dict):
             data = [data]
 
@@ -148,8 +146,7 @@ def _get_gpu_info_wmi():
 
 
 def _try_nvidia_smi():
-    # not all systems have an NVIDIA GPU / nvidia-smi installed -- this
-    # is optional, silently return None if it's not available
+    # NVIDIA systems can provide more accurate VRAM and driver data.
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
@@ -219,7 +216,7 @@ def get_disk_health():
             disks.append({
                 "device_id": entry.get("DeviceId", "unknown"),
                 "name": entry.get("FriendlyName", "unknown"),
-                "media_type": entry.get("MediaType", "unknown"),  # SSD/HDD
+                "media_type": entry.get("MediaType", "unknown"),
                 "health_status": entry.get("HealthStatus", "unknown"),
                 "operational_status": entry.get("OperationalStatus", "unknown"),
                 "size_gb": round(size_bytes / (1024 ** 3), 2) if size_bytes else "unknown",

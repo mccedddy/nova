@@ -4,8 +4,7 @@ import os
 import time
 from datetime import datetime
 
-# common temp/cache path fragments -- kept as a constant so it's easy to
-# extend later without touching the function logic
+# Path fragments used to report temp/cache signals.
 TEMP_CACHE_PATTERNS = [
     r"\appdata\local\temp",
     r"\temp",
@@ -16,14 +15,12 @@ TEMP_CACHE_PATTERNS = [
     r"\appdata\local\bravesoftware\brave-browser\user data\default\cache",
 ]
 
-DEFAULT_TIMEOUT = 20  # seconds -- hard cap so a huge search can't hang forever
+DEFAULT_TIMEOUT = 20
 MAX_RESULTS = 40
 
 
 def search_files(pattern, root_path=None):
-    # if no root given, search common locations rather than the whole C:
-    # drive (slow last resort, per the plan) -- model must explicitly pass
-    # root_path="C:\\" if it wants a full-drive search
+    # Default roots avoid an unexpectedly expensive full-drive search.
     roots = [root_path] if root_path else _default_roots()
 
     all_matches = []
@@ -68,8 +65,7 @@ def _default_roots():
 
 
 def _search_one_root(root, pattern, timeout):
-    # uses PowerShell's Get-ChildItem -Recurse, generally faster than
-    # Python's os.walk for large directory trees on Windows
+    # PowerShell handles recursive Windows file enumeration efficiently.
     if not os.path.exists(root):
         return [], False
 
@@ -112,9 +108,7 @@ def _search_one_root(root, pattern, timeout):
     return matches, False
 
 def get_folder_size(path):
-    # recursive total size + breakdown of largest subfolders/files.
-    # uses PowerShell (faster than Python's os.walk for large trees, same
-    # reasoning as search_files) with the same time-budget safety net.
+    # Use a time budget because recursive scans can be expensive.
     if not os.path.exists(path):
         return {"error": f"Path does not exist: {path}"}
 
@@ -160,9 +154,7 @@ def _get_total_size(path, timeout):
 
 
 def _get_largest_items(path, timeout):
-    # top 10 largest immediate subfolders + files, by total size --
-    # gives a "what's actually taking up space here" breakdown without
-    # walking the whole tree a second time for every nested file
+    # Report the largest immediate entries to keep the result compact.
     ps_command = (
         f"Get-ChildItem -Path '{path}' -ErrorAction SilentlyContinue | "
         f"ForEach-Object {{ "
@@ -237,9 +229,7 @@ def analyze_file_relevance(path):
 
 
 def _check_if_locked(path):
-    # imperfect but simple: try to open exclusively, catch PermissionError.
-    # Known gap (per the plan) -- doesn't identify WHICH process holds the
-    # lock, and won't catch every locking scenario. Good enough for v1.
+    # An exclusive open is a useful signal, but cannot identify the locking process.
     if os.path.isdir(path):
         return "n/a (folder)"
 

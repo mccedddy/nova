@@ -6,26 +6,21 @@ MAX_RESULTS = 8
 TIMEOUT = 15
 
 FETCH_TIMEOUT = 15
-MAX_PAGE_CHARS = 4000  # trimmed to keep context usage reasonable
+MAX_PAGE_CHARS = 4000
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 }
 
-# try these backends in order -- if one fails (rate limited, network
-# hiccup, backend changed something), fall back to the next rather than
-# failing the whole search
+# Try backends in order so a transient failure does not abort the search.
 BACKENDS = ["duckduckgo", "bing", "google"]
 
-DEFAULT_LOCATION = "Barangay Highway Hills, Mandaluyong City"  # fallback if geolocation fails
+DEFAULT_LOCATION = "Barangay Highway Hills, Mandaluyong City"
 
 
 def web_search(query):
-    # real web search, used when the model doesn't recognize something
-    # (unfamiliar process/file/error) instead of guessing from training
-    # data. Returns summarized (title, snippet, url) tuples, not full
-    # page dumps, to avoid blowing the context window.
+    # Return compact results so web content does not dominate the context.
     last_error = None
 
     for backend in BACKENDS:
@@ -41,7 +36,7 @@ def web_search(query):
                 results = [
                     {
                         "title": r.get("title", "unknown"),
-                        "snippet": r.get("body", "")[:800],  # trim long snippets
+                        "snippet": r.get("body", "")[:800],
                         "url": r.get("href", "unknown"),
                     }
                     for r in raw_results
@@ -50,7 +45,7 @@ def web_search(query):
 
         except Exception as e:
             last_error = str(e)
-            continue  # try the next backend
+            continue
 
     return {
         "query": query,
@@ -59,12 +54,7 @@ def web_search(query):
     }
 
 def fetch_page(url, max_chars=8000):
-    # fetches a specific page and extracts its main readable text --
-    # use this AFTER web_search when a snippet isn't enough detail and
-    # you need the actual article content, not just a preview.
-    # max_chars defaults to 8000 (~2000-2600 tokens) to keep context usage
-    # reasonable -- raise it only when genuinely needed (e.g. comparing
-    # multiple long sources), since large fetches eat context fast.
+    # Fetch a specific page when a search snippet lacks enough detail.
     try:
         response = requests.get(url, headers=HEADERS, timeout=FETCH_TIMEOUT)
         response.raise_for_status()
@@ -83,8 +73,7 @@ def fetch_page(url, max_chars=8000):
     except Exception as e:
         return {"url": url, "error": f"Failed to parse page content: {e}"}
 
-    # hard ceiling regardless of what's requested -- protects against a
-    # runaway argument value blowing past the context window entirely
+    # Enforce a hard ceiling on content returned to the model.
     max_chars = min(max_chars, 20000)
 
     truncated = len(text) > max_chars
@@ -97,11 +86,7 @@ def fetch_page(url, max_chars=8000):
     }
 
 def get_approximate_location():
-    # uses a free IP-geolocation service to estimate city-level location --
-    # not GPS-precise, and this is the one tool in NOVA that sends anything
-    # (your public IP, implicitly) to an external service, unlike every
-    # other tool which only reads local system state. Falls back to a
-    # hardcoded default if the service is unreachable or fails.
+    # This is the only tool that sends the public IP to an external service.
     try:
         response = requests.get("http://ip-api.com/json/", timeout=8)
         response.raise_for_status()
@@ -115,6 +100,6 @@ def get_approximate_location():
             return {"location": location or DEFAULT_LOCATION, "source": "ip_geolocation"}
 
     except (requests.exceptions.RequestException, ValueError):
-        pass  # fall through to default below
+        pass
 
     return {"location": DEFAULT_LOCATION, "source": "default_fallback"}

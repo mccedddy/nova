@@ -42,10 +42,7 @@ def chat(messages, tools=None, stream=False, timeout=120):
 
 
 def chat_stream(messages, tools=None, timeout=120, on_token=None):
-    # streaming variant -- yields the full accumulated response at the end,
-    # same shape as chat()'s return value, but calls on_token(text) as each
-    # content chunk arrives so the caller can print it live.
-    # tool_calls (if any) arrive as a complete chunk, not token-by-token.
+    # Stream content to the terminal while returning the same shape as chat().
     payload = {
         "model": MODEL,
         "messages": messages,
@@ -106,8 +103,7 @@ def chat_stream(messages, tools=None, timeout=120, on_token=None):
     except requests.exceptions.RequestException as e:
         raise OllamaUnavailableError(f"Connection lost while streaming: {e}")
 
-    # reconstruct a response object shaped like the non-streaming one,
-    # so extract_tool_calls()/get_final_text() work unchanged
+    # Normalize the streamed response so the rest of the agent is transport-agnostic.
     return {
         "message": {
             "role": "assistant",
