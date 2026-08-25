@@ -4,7 +4,7 @@ from tools.system import get_system_diagnostics, get_gpu_driver_info, get_disk_h
 from tools.processes import list_running_processes, get_network_connections
 from tools.registry import query_registry, list_installed_apps
 from tools.filesystem import search_files, get_folder_size, analyze_file_relevance
-from tools.websearch import web_search
+from tools.websearch import web_search, fetch_page, get_approximate_location
 
 SYSTEM_PROMPT = """You are N.O.V.A. (Native Operating-system Virtual Assistant), a local AI agent that inspects this Windows system using the tools available to you.
 
@@ -17,7 +17,10 @@ Rules:
 6. web_search: use it when you don't recognize something, or to check current info (e.g. latest version of something). Don't claim it or any other tool is "unavailable" unless you actually tried it and it failed. For "is X outdated" questions, always chain: check the local version first, then web_search for the latest, then compare -- don't stop after only the local check.
 7. Don't over-search: after 2-3 searches on the same question, give your best answer with the uncertainty noted, rather than continuing to reformulate the query.
 8. When calling a tool, include one short sentence in your response describing what you're checking. Don't show internal reasoning.
-9. Keep answers direct. Use tables/bullets only when they genuinely help, not for single-fact answers. Avoid excessive emoji."""
+9. Keep answers direct. Use tables/bullets only when they genuinely help, not for single-fact answers. Avoid excessive emoji.
+10. When summarizing from search results, distinguish between what a source directly states and any analysis/speculation in that source. Don't present a journalist's interpretation as a confirmed fact. If details are inconsistent or incomplete across snippets, say what's uncertain rather than filling gaps with your own inference.
+11. If web_search snippets aren't detailed enough to answer confidently (e.g. comparing exact version numbers, or the user wants specifics beyond a summary), use fetch_page on the most relevant result URL to get real content instead of guessing from a fragment.
+12. If a question needs location context (e.g. weather) and none was given, use get_approximate_location first, then web_search with that location."""
 
 MAX_ITERATIONS = 10
 MAX_RETRIES = 2
@@ -40,6 +43,8 @@ TOOL_REGISTRY = {
     "get_folder_size": get_folder_size,
     "analyze_file_relevance": analyze_file_relevance,
     "web_search": web_search,
+    "fetch_page": fetch_page,
+    "get_approximate_location": get_approximate_location,
 }
 
 TOOL_SCHEMAS = [
@@ -299,6 +304,52 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_page",
+            "description": (
+                "Fetch and extract the readable text content of a specific web "
+                "page by URL. Use this AFTER web_search when a search snippet "
+                "isn't enough detail to answer accurately -- e.g. comparing "
+                "specific version numbers, or getting full plot/technical "
+                "details rather than a short preview. Don't use this as a "
+                "first step; always search first to find the right URL."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The full URL to fetch, usually from a prior web_search result",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Max characters of page content to return (default 8000). Raise for long pages needing more detail, up to 20000.",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_approximate_location",
+            "description": (
+                "Get an approximate city-level location for this machine, "
+                "based on IP geolocation (falls back to a default if that "
+                "fails). Use this when a question needs location context, "
+                "like checking the weather, and no location was given. Not "
+                "GPS-precise -- city/region level only."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
             },
         },
     },

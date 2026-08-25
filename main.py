@@ -6,7 +6,6 @@ def main(show_debug_tools=False):
 
     current_date = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
     system_prompt_with_date = f"{SYSTEM_PROMPT}\n\nToday's real date and time is {current_date}. Use this for any date/time-relative reasoning -- do not guess or assume what year or date it is."
-    print(system_prompt_with_date)
 
     messages = [{"role": "system", "content": system_prompt_with_date}]
 
