@@ -31,10 +31,10 @@ def main(show_debug_tools=False, show_full_output=False):
             show_debug_tools=show_debug_tools,
             show_full_output=show_full_output
         )
-    if answer:
-        print(f"\n{answer}\n")
-    else:
-        print()  # just a trailing blank line after the streamed output
+        if answer:
+            print(f"\n{answer}\n")
+        else:
+            print()  # just a trailing blank line after the streamed output
 
 
 if __name__ == "__main__":
