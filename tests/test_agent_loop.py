@@ -87,3 +87,74 @@ def test_ollama_unavailable_returns_clean_error():
         result = run_turn("hi", [])
 
     assert "can't reach ollama" in result.lower()
+
+def test_retry_recovers_after_model_self_corrects():
+    # first attempt fails validation (missing "pattern"), model corrects
+    # itself, succeeds
+    responses = [
+        _fake_response(tool_calls=_tool_call("search_files", {})),  # missing pattern
+        _fake_response(tool_calls=_tool_call("search_files", {"pattern": "*.log"})),  # corrected
+        _fake_response(content="Found some log files."),
+    ]
+
+    def fake_chat_stream(messages, tools=None, on_token=None):
+        return responses.pop(0)
+
+    messages = []
+    with patch.object(loop_module, "chat_stream", fake_chat_stream):
+        result = run_turn("find log files", messages)
+
+    assert result == ""
+    assert messages[-1]["content"] == "Found some log files."
+    tool_messages = [m for m in messages if m.get("role") == "tool"]
+    assert any("missing required argument" in m["content"] for m in tool_messages)
+
+
+def test_multiple_tool_calls_in_one_response():
+    # model requests two tool calls in a single turn
+    responses = [
+        _fake_response(tool_calls=[
+            {"function": {"name": "get_system_diagnostics", "arguments": {}}},
+            {"function": {"name": "get_disk_health", "arguments": {}}},
+        ]),
+        _fake_response(content="Here's your system and disk info."),
+    ]
+
+    def fake_chat_stream(messages, tools=None, on_token=None):
+        return responses.pop(0)
+
+    messages = []
+    with patch.object(loop_module, "chat_stream", fake_chat_stream):
+        result = run_turn("check my system and disk", messages)
+
+    assert result == ""
+    assert messages[-1]["content"] == "Here's your system and disk info."
+    tool_messages = [m for m in messages if m.get("role") == "tool"]
+    assert len(tool_messages) == 2  # both tool calls produced results
+
+
+def test_tool_execution_exception_handled_gracefully():
+    # simulate a real Python exception during tool execution, not a
+    # validation failure -- e.g. a PermissionError from a real tool
+    import agent.tool_registry as registry_module
+
+    def broken_tool():
+        raise PermissionError("Access denied")
+
+    responses = [
+        _fake_response(tool_calls=_tool_call("get_disk_health", {})),
+        _fake_response(content="I couldn't check disk health due to a permissions issue."),
+    ]
+
+    def fake_chat_stream(messages, tools=None, on_token=None):
+        return responses.pop(0)
+
+    messages = []
+    with patch.object(loop_module, "chat_stream", fake_chat_stream), \
+         patch.dict(registry_module.TOOL_REGISTRY, {"get_disk_health": broken_tool}):
+        result = run_turn("is my disk healthy", messages)
+
+    assert result == ""
+    assert "permissions issue" in messages[-1]["content"].lower()
+    tool_messages = [m for m in messages if m.get("role") == "tool"]
+    assert any("Access denied" in m["content"] for m in tool_messages)
