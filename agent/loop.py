@@ -6,9 +6,10 @@ from tools.tool_schemas import TOOL_SCHEMAS
 
 MAX_ITERATIONS = 10
 MAX_RETRIES = 2
+MAX_TERMINAL_CHARS = 1000
 
 
-def run_turn(user_input, messages, show_debug_tools=False):
+def run_turn(user_input, messages, show_debug_tools=False, show_full_output=False):
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
 
@@ -76,7 +77,8 @@ def run_turn(user_input, messages, show_debug_tools=False):
                     result = f"error: {validated} -- please retry with corrected arguments"
 
             if show_debug_tools:
-                print(f"\u2190 result: {result}")
+                displayed_result = result if show_full_output else _truncate_for_terminal(result)
+                print(f"\u2190 result: {displayed_result}")
 
             messages.append({
                 "role": "tool",
@@ -84,3 +86,9 @@ def run_turn(user_input, messages, show_debug_tools=False):
             })
 
     return "I couldn't complete that after several tool calls -- something may be wrong with my tool use."
+
+def _truncate_for_terminal(text, max_chars=MAX_TERMINAL_CHARS):
+    if len(str(text)) <= max_chars:
+        return text
+    return str(text)[:max_chars] + f"\n... (+{len(str(text)) - max_chars} more characters, full data available to the model)"
+    return "\n".join(shown) + f"\n... (+{remaining} more lines, full data available to the model)"

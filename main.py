@@ -3,7 +3,7 @@ from datetime import datetime
 from agent.loop import run_turn
 from agent.prompts import SYSTEM_PROMPT
 
-def main(show_debug_tools=False):
+def main(show_debug_tools=False, show_full_output=False):
     print("N.O.V.A. -- type 'exit' or 'quit' to leave.\n")
 
     current_date = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
@@ -26,10 +26,11 @@ def main(show_debug_tools=False):
             continue
 
         answer = run_turn(
-        user_input,
-        messages,
-        show_debug_tools=show_debug_tools,
-    )
+            user_input,
+            messages,
+            show_debug_tools=show_debug_tools,
+            show_full_output=show_full_output
+        )
     if answer:
         print(f"\n{answer}\n")
     else:
@@ -44,5 +45,10 @@ if __name__ == "__main__":
         action="store_true",
         help="show raw tool names, arguments, and results while chatting",
     )
+    parser.add_argument(
+        "--full-output",
+        action="store_true",
+        help="show full untruncated tool results (only relevant with --debug-tools)",
+    )
     args = parser.parse_args()
-    main(show_debug_tools=args.debug_tools)
+    main(show_debug_tools=args.debug_tools, show_full_output=args.full_output)

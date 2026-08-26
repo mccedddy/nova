@@ -1,7 +1,19 @@
 # N.O.V.A. — Native Operating-system Virtual Assistant
 ## Project Plan
 
-Local, offline Windows-inspection agent powered by Ollama (qwen2.5-coder:14b) using tool-calling. Terminal-only, read-only, no destructive actions.
+Local, read-only Windows-inspection agent powered by Ollama (currently `qwen3.5:9b`) using tool-calling. The first client is terminal-based; a local Python API is planned for future web and desktop clients. No destructive actions.
+
+## Current status
+
+The core tool and terminal foundation is implemented:
+
+- 13 read-only tools are implemented across `tools/`.
+- Native Ollama tool calling, streaming output, validation, retries, and tool timeouts are implemented.
+- Tool schemas live in `tools/tool_schemas.py`.
+- Tool registration lives in `agent/tool_registry.py`.
+- The system prompt and terminal progress messages live in `agent/prompts.py` and `agent/progress.py`.
+- The next priority is controlled behavioral testing after each small refactor.
+- Full mocked agent-loop tests and the API layer are still outstanding.
 
 ---
 
@@ -17,7 +29,7 @@ Suggested pace: Phases 0–2 are the foundation and deserve the most care. Phase
 **Goal:** Confirm every moving part works in isolation before writing agent code.
 **Done when:** You can hit Ollama's API from Python and get a normal chat response back, and you can run a PowerShell command from Python and capture its output.
 
-1. Confirm `ollama serve` is running and `qwen2.5-coder:14b` is pulled (`ollama list`).
+1. Confirm `ollama serve` is running and `qwen3.5:9b` is available (`ollama list`).
 2. Confirm the model supports tool calling in your Ollama version — test with a trivial `curl`/Python call to `/api/chat` passing a single dummy tool schema and see if it returns a `tool_calls` field instead of plain text.
 3. Set up the Python project folder structure (see "Suggested folder layout" below).
 4. Set up a virtual environment, install base deps (`requests` or `ollama` python package, `pywin32` for winreg/WMI helpers, `psutil` for process/network info).
@@ -30,29 +42,37 @@ Suggested pace: Phases 0–2 are the foundation and deserve the most care. Phase
 nova/
   main.py                 # entry point, terminal loop
   agent/
-    loop.py                # the tool-calling loop itself
+    loop.py                # one conversation turn and tool-calling loop
     client.py               # thin wrapper around Ollama /api/chat
-    validation.py            # tool-call parsing/retry logic
+    prompts.py              # system prompt
+    progress.py             # terminal progress messages
+    tool_registry.py        # executable tool lookup table
+    validation.py           # tool-call validation
   tools/
-    __init__.py               # tool registry
-    tool_schemas.py             # JSON schemas for all tools (single source of truth)
+    __init__.py             # tools package
+    tool_schemas.py         # JSON schemas for all tools
     filesystem.py                 # search_files, get_folder_size, analyze_file_relevance
     registry.py                     # query_registry, list_installed_apps
     system.py                        # get_system_diagnostics, get_gpu_driver_info, get_disk_health
     processes.py                      # list_running_processes, get_network_connections
     websearch.py                       # web_search
   tests/
-    test_<tool>.py            # one file per tool, run manually against your real machine
+    test_<tool>.py          # focused tool tests
+    test_agent.py           # mocked agent-loop tests
+  api/                      # planned Python API for web/desktop clients
+    server.py               # local HTTP entry point
+    routes.py               # chat and health routes
+    models.py               # request/response models
 ```
 
 ---
 
-## Phase 1 — Minimal agent loop (no real tools yet)
+## Phase 1 — Minimal agent loop (completed)
 **Goal:** Build the ReAct-style loop with one fake tool, so the plumbing is proven before real complexity enters.
-**Done when:** You can ask a simple test question and watch the model call a fake tool, get a result, and answer in natural language — end to end.
+**Done when:** The model can call a tool, receive its result, and answer in natural language — end to end.
 
 1. Write `client.py`: a function `chat(messages, tools)` that POSTs to `/api/chat` with `stream=False` and returns the parsed JSON.
-2. Write one dummy tool and its JSON schema by hand — this is your template for every real tool later.
+2. Write a small tool and its JSON schema by hand — this became the template for the real tools.
 3. Write `loop.py`'s core cycle:
    - send user message + tool schemas to model
    - if response has `tool_calls`: execute the matching Python function, append result as a `tool` role message, loop again
@@ -63,7 +83,7 @@ nova/
 
 ---
 
-## Phase 2 — Tool-call robustness (this is the phase SAFETY.md is warning you about)
+## Phase 2 — Tool-call robustness
 **Goal:** Handle the fact that a 14b local model *will* occasionally mangle tool calls — wrong tool name, malformed JSON args, missing required args, or calling a tool when it should've just answered in text.
 **Done when:** You can feed the loop deliberately bad/edge-case inputs and it degrades gracefully instead of crashing.
 
@@ -123,13 +143,21 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 ### 3.10 `analyze_file_relevance(path)`
 - Last accessed/modified time, whether path matches known temp/cache patterns (`\AppData\Local\Temp\`, `\Temp\`, `\Cache\`, `\CrashDumps\`, browser cache paths, etc. — keep this pattern list in a constant so it's easy to extend), and whether any running process currently has it open/locked.
 - File-lock check: this is the fiddly one on Windows — no built-in Python way to check "is this file open by another process" cheaply. Options: try opening the file exclusively and catch `PermissionError` (works for simple cases, imperfect), or shell out to a tool like `handle.exe` (Sysinternals) if you're willing to bundle a third-party binary, or just skip lock-checking in v1 and note it as a known gap.
-- This tool should return *signals*, not a verdict — resist the temptation to have it output "SAFE TO DELETE: yes/no". Let the model synthesize the signals into an answer; keep the tool itself purely descriptive per SAFETY.md.
+- This tool should return *signals*, not a verdict — resist the temptation to have it output "SAFE TO DELETE: yes/no". Let the model synthesize the signals into an answer; keep the tool itself purely descriptive.
 
 ### 3.11 `web_search(query)`
 - Build this last, after the local tools prove the loop works, since it adds an external dependency.
 - Pick the search backend (DDGS since you've used it before is the path of least resistance — no API key).
 - Summarize/trim results before returning to the model — raw scraped pages will blow the context window. Return top N results as (title, snippet, url) tuples.
 - Decide the trigger condition explicitly in the system prompt: "use web_search only when you don't recognize a process/file name from your own knowledge" — otherwise the model may reach for it constantly and slow every answer down.
+
+### 3.12 `fetch_page(url)`
+- Fetch readable text after `web_search` when snippets are insufficient.
+- Enforce a response-size ceiling before returning content to the model.
+
+### 3.13 `get_approximate_location()`
+- Resolve city-level location only when a request needs location context and the user did not provide one.
+- Keep the external geolocation behavior explicit because it sends the public IP to a third-party service.
 
 **For every tool above, repeat this mini-checklist:**
 - [ ] Write the JSON schema in `tool_schemas.py`
@@ -142,12 +170,14 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ## Phase 4 — System prompt & tool-selection quality
 **Goal:** Now that all tools exist, tune how the model chooses between them — this is where most of your iteration time will actually go.
-**Done when:** The 12 example questions from PROJECT_BACKGROUND all route to sensible tool(s) and produce a correct, well-formed answer.
+**Done when:** A representative set of local, web, ambiguous, and multi-step questions route to sensible tools and produce correct, well-formed answers.
 
 1. Write a system prompt that: describes NOVA's purpose, lists the tools at a high level (schemas already do the detail), states the read-only/no-destructive-action boundary explicitly, and instructs the model to ask a clarifying question rather than guess when a request is ambiguous (e.g. "delete garbage files" with no target given).
-2. Run each of the example questions from PROJECT_BACKGROUND through the full system, log which tool(s) get called, and check they're the *right* ones.
+2. Run the representative question set through the full system, log which tool(s) get called, and check they're the *right* ones.
 3. For multi-step questions ("is my GPU driver outdated" — requires `get_gpu_driver_info` *and* `web_search` to check the latest version), confirm the model correctly chains two tool calls instead of stopping after one.
 4. Iterate on tool *descriptions* (in the schema, not just the system prompt) when the model picks the wrong tool — this is usually a description-wording problem, not a model-capability problem.
+5. Record tool order, repeated calls, total model requests, unsupported claims, and answer focus.
+6. Treat excessive web-search/fetch chains and long unrelated answers as failures even when the process eventually returns an answer.
 
 ---
 
@@ -161,6 +191,8 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 4. Handle long tool outputs sensibly in the terminal (truncate huge file lists with a "+N more" instead of dumping 500 lines).
 5. Simple in-session conversation history so follow-up questions ("what about the other drive?") retain context — still no persistence to disk yet, just in-memory for the session per your scope.
 
+Streaming output, progress messages, debug tool output, clean exits, and in-memory history are already implemented. Remaining work includes terminal output truncation and broader automated coverage.
+
 ---
 
 ## Phase 6 — Testing pass
@@ -172,16 +204,33 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 3. Test on a path with unusual characters/very long paths (Windows `MAX_PATH` issues are real — consider `\\?\` prefix handling if you hit this).
 4. Test what happens when Ollama is unreachable (service stopped) — should fail with a clear message, not hang forever.
 5. Test a rapid-fire ambiguous question ("clean up my computer") to confirm the model asks for clarification instead of inventing a destructive-sounding plan.
+6. Add mocked tests for the agent turn so loop changes can be validated without calling Ollama or scanning the machine.
+7. Keep the fixed comparison prompt as a manual model-quality regression test; output is not expected to be identical between stochastic model runs.
 
 ---
 
-## Explicitly out of scope for this phase (per PROJECT_BACKGROUND / SAFETY)
+## Phase 7 — Local Python API
+**Goal:** Expose the agent core to web or desktop clients while keeping the terminal client working.
+**Done when:** A local client can submit a prompt, receive structured progress and final output, and maintain an isolated conversation without directly accessing Ollama or Windows tools.
+
+1. Choose a small HTTP framework, preferably FastAPI, and add it as an explicit dependency.
+2. Separate agent execution from terminal printing so the core can return events instead of writing directly to stdout.
+3. Add a `POST /chat` route accepting a message and conversation ID.
+4. Add a health route that reports API and Ollama connectivity without exposing system details unnecessarily.
+5. Support streamed responses with Server-Sent Events (SSE) or WebSockets.
+6. Keep conversation histories isolated per client or conversation ID; do not persist them until persistence is explicitly designed.
+7. Bind to `127.0.0.1` by default. Add authentication and access controls before allowing LAN or internet access.
+8. Return structured events such as `tool_started`, `tool_finished`, `assistant_token`, `answer`, and `error`.
+9. Test the API with mocked Ollama responses before connecting a real web or desktop frontend.
+
+---
+
+## Explicitly out of scope for this phase
 Keep a running "not now" list so scope doesn't creep mid-build:
 - Any actual delete/move/uninstall execution
 - Persistent memory/logging across sessions
-- GUI
-- Docker/server deployment
-- Multi-user or remote access
+- A frontend implementation (web or desktop)
+- Public deployment or unauthenticated remote access
 
 ---
 
@@ -190,10 +239,11 @@ Keep a running "not now" list so scope doesn't creep mid-build:
 | Phase | What | Est. relative effort |
 |---|---|---|
 | 0 | Environment checks | Small |
-| 1 | Fake-tool agent loop | Small–Medium |
+| 1 | Minimal agent loop | Small–Medium |
 | 2 | Validation/retry robustness | Medium |
-| 3 | 11 real tools, one at a time | Large (bulk of the project) |
+| 3 | 13 read-only tools | Large |
 | 4 | System prompt + tool-selection tuning | Medium |
 | 5 | Terminal UX | Small |
 | 6 | Testing pass | Small–Medium |
+| 7 | Local Python API | Medium |
 
