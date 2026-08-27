@@ -1,4 +1,5 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
+from agent.permissions import PermissionDenied, execute_tool
 from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
 from tools.tool_schemas import TOOL_SCHEMAS
@@ -46,20 +47,28 @@ def run_turn_events(user_input, messages):
             yield {"type": "tool_started", "name": name, "args": args}
 
             ok, validated = validate_tool_call(name, args, TOOL_REGISTRY, TOOL_SCHEMAS)
+            permission_error = False
 
             if ok:
                 try:
-                    result = TOOL_REGISTRY[name](**validated)
+                    result = execute_tool(name, validated, TOOL_REGISTRY)
+                except PermissionDenied as e:
+                    ok = False
+                    permission_error = True
+                    validated = str(e)
                 except Exception as e:
                     ok = False
                     validated = str(e)
 
             if not ok:
-                failure_counts[name] = failure_counts.get(name, 0) + 1
-                if failure_counts[name] > MAX_RETRIES:
-                    result = f"error: {validated} -- giving up on '{name}' after {MAX_RETRIES} retries"
+                if permission_error:
+                    result = f"error: {validated}"
                 else:
-                    result = f"error: {validated} -- please retry with corrected arguments"
+                    failure_counts[name] = failure_counts.get(name, 0) + 1
+                    if failure_counts[name] > MAX_RETRIES:
+                        result = f"error: {validated} -- giving up on '{name}' after {MAX_RETRIES} retries"
+                    else:
+                        result = f"error: {validated} -- please retry with corrected arguments"
 
             yield {"type": "tool_finished", "name": name, "result": str(result)}
 

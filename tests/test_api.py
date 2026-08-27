@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 import api.server as server
 import agent.loop_events as events_module
+import agent.permissions as permissions_module
 
 
 client = TestClient(server.app)
@@ -32,6 +33,10 @@ def test_event_loop_yields_tool_lifecycle_and_answer():
 
     with patch.object(events_module, "chat", fake_chat), patch.dict(
         events_module.TOOL_REGISTRY, {"fake_tool": lambda: "value"}, clear=False
+    ), patch.object(
+        permissions_module,
+        "READ_ONLY_TOOLS",
+        permissions_module.READ_ONLY_TOOLS | {"fake_tool"},
     ), patch.object(
         events_module, "TOOL_SCHEMAS", [
             {
