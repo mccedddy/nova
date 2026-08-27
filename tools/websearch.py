@@ -9,11 +9,11 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
 
-MAX_RESULTS = 6
-TIMEOUT = 15
+MAX_RESULTS = 5
+TIMEOUT = 12
 
 FETCH_TIMEOUT = 15
-MAX_PAGE_CHARS = 4000
+MAX_PAGE_CHARS = 5000
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -95,7 +95,7 @@ def _ollama_web_search(query):
     results = [
         {
             "title": item.get("title", "unknown"),
-            "snippet": item.get("content", "")[:800],
+            "snippet": item.get("content", "")[:500],
             "url": item.get("url", "unknown"),
         }
         for item in payload.get("results", [])
