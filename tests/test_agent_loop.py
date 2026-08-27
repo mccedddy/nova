@@ -64,12 +64,16 @@ def test_unknown_tool_name_reported_as_error():
 
 def test_max_iterations_cap_reached():
     def fake_chat(messages, tools=None):
+        if tools == []:
+            return _fake_response(content="Based on the information gathered so far, here is the answer.")
         return _fake_response(tool_calls=_tool_call("get_system_diagnostics", {}))
 
+    messages = []
     with patch.object(loop_module, "chat", fake_chat):
-        result = run_turn("loop forever", [])
+        result = run_turn("loop forever", messages)
 
-    assert "couldn't complete that after several tool calls" in result.lower()
+    assert result == "Based on the information gathered so far, here is the answer."
+    assert messages[-1]["role"] == "assistant"
 
 
 def test_ollama_unavailable_returns_clean_error():

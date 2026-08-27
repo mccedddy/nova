@@ -8,6 +8,24 @@ MAX_ITERATIONS = 10
 MAX_RETRIES = 2
 
 
+def _summarize_gathered_results(messages):
+    synthesis_messages = messages + [{
+        "role": "user",
+        "content": (
+            "The tool-call limit has been reached. Answer the original user request now "
+            "using only the confirmed information already gathered. State clearly what "
+            "could not be verified. Do not call any tools."
+        ),
+    }]
+    try:
+        response = chat(synthesis_messages, tools=[])
+    except OllamaUnavailableError:
+        return None
+
+    final_text = get_final_text(response)
+    return final_text.strip() or None
+
+
 def run_turn_events(user_input, messages):
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
@@ -84,7 +102,13 @@ def run_turn_events(user_input, messages):
                 }
                 return
 
+    final_text = _summarize_gathered_results(messages)
+    if final_text:
+        messages.append({"role": "assistant", "content": final_text})
+        yield {"type": "answer", "text": final_text}
+        return
+
     yield {
         "type": "error",
-        "text": "I couldn't complete that after several tool calls -- something may be wrong with my tool use.",
+        "text": "I gathered information but couldn't produce a final answer from it.",
     }

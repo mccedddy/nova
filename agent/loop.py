@@ -18,6 +18,24 @@ def _truncate_for_terminal(text, max_chars=MAX_TERMINAL_CHARS):
     return text[:max_chars] + f"\n... (+{remaining} more characters, full data available to the model)"
 
 
+def _summarize_gathered_results(messages):
+    synthesis_messages = messages + [{
+        "role": "user",
+        "content": (
+            "The tool-call limit has been reached. Answer the original user request now "
+            "using only the confirmed information already gathered. State clearly what "
+            "could not be verified. Do not call any tools."
+        ),
+    }]
+    try:
+        response = chat(synthesis_messages, tools=[])
+    except OllamaUnavailableError:
+        return None
+
+    final_text = get_final_text(response)
+    return final_text.strip() or None
+
+
 def run_turn(user_input, messages, show_debug_tools=False, show_full_output=False):
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
@@ -93,4 +111,8 @@ def run_turn(user_input, messages, show_debug_tools=False, show_full_output=Fals
             if permission_error:
                 return "The action was not executed because confirmation was declined."
 
-    return "I couldn't complete that after several tool calls -- something may be wrong with my tool use."
+    final_text = _summarize_gathered_results(messages)
+    if final_text:
+        messages.append({"role": "assistant", "content": final_text})
+        return final_text
+    return "I gathered information but couldn't produce a final answer from it."

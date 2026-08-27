@@ -59,6 +59,41 @@ def test_event_loop_yields_tool_lifecycle_and_answer():
     assert result[2]["text"] == "Done."
 
 
+def test_event_loop_summarizes_after_tool_limit():
+    def fake_chat(messages, tools=None):
+        if tools == []:
+            return {"message": {"content": "Summary from gathered results.", "tool_calls": []}}
+        return {
+            "message": {
+                "content": "",
+                "tool_calls": [
+                    {"function": {"name": "fake_tool", "arguments": {}}},
+                ],
+            },
+        }
+
+    with patch.object(events_module, "chat", fake_chat), patch.dict(
+        events_module.TOOL_REGISTRY, {"fake_tool": lambda: "value"}, clear=False
+    ), patch.object(
+        permissions_module,
+        "READ_ONLY_TOOLS",
+        permissions_module.READ_ONLY_TOOLS | {"fake_tool"},
+    ), patch.object(
+        events_module, "TOOL_SCHEMAS", [
+            {
+                "type": "function",
+                "function": {
+                    "name": "fake_tool",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            }
+        ],
+    ):
+        result = list(events_module.run_turn_events("keep going", []))
+
+    assert result[-1] == {"type": "answer", "text": "Summary from gathered results."}
+
+
 def test_chat_returns_ndjson_and_generated_conversation_id():
     def fake_events(message, messages):
         assert message == "hello"
