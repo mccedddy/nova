@@ -1,6 +1,7 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.progress import TOOL_PROGRESS_MESSAGES
 from agent.permissions import PermissionDenied, execute_tool, request_confirmation
+from agent.recovery import annotate_command_failure, is_execution_failure
 from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
 from tools.tool_schemas import TOOL_SCHEMAS
@@ -39,6 +40,7 @@ def _summarize_gathered_results(messages):
 def run_turn(user_input, messages, show_debug_tools=False, show_full_output=False):
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
+    command_failure_counts = {}
 
     for _ in range(MAX_ITERATIONS):
         try:
@@ -88,6 +90,10 @@ def run_turn(user_input, messages, show_debug_tools=False, show_full_output=Fals
                 except Exception as e:
                     ok = False
                     validated = str(e)
+
+            if ok and is_execution_failure(name, result):
+                command_failure_counts[name] = command_failure_counts.get(name, 0) + 1
+                result = annotate_command_failure(result, command_failure_counts[name])
 
             if not ok:
                 if permission_error:
