@@ -1,0 +1,74 @@
+from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
+from agent.tool_registry import TOOL_REGISTRY
+from agent.validation import validate_tool_call
+from tools.tool_schemas import TOOL_SCHEMAS
+
+MAX_ITERATIONS = 10
+MAX_RETRIES = 2
+
+
+def run_turn_events(user_input, messages):
+    messages.append({"role": "user", "content": user_input})
+    failure_counts = {}
+
+    for _ in range(MAX_ITERATIONS):
+        try:
+            response = chat(messages, tools=TOOL_SCHEMAS)
+        except OllamaUnavailableError as e:
+            messages.pop()
+            yield {"type": "error", "text": str(e)}
+            return
+
+        tool_calls = extract_tool_calls(response)
+
+        if not tool_calls:
+            final_text = get_final_text(response)
+            if not final_text.strip():
+                yield {
+                    "type": "error",
+                    "text": (
+                        "I gathered information but ran out of room to summarize it "
+                        "(too much data from the tool results). Try asking a more "
+                        "specific question, like checking one folder or location at a time."
+                    ),
+                }
+                return
+            messages.append({"role": "assistant", "content": final_text})
+            yield {"type": "answer", "text": final_text}
+            return
+
+        messages.append(response["message"])
+
+        for call in tool_calls:
+            name = call["name"]
+            args = call["arguments"]
+
+            yield {"type": "tool_started", "name": name, "args": args}
+
+            ok, validated = validate_tool_call(name, args, TOOL_REGISTRY, TOOL_SCHEMAS)
+
+            if ok:
+                try:
+                    result = TOOL_REGISTRY[name](**validated)
+                except Exception as e:
+                    ok = False
+                    validated = str(e)
+
+            if not ok:
+                failure_counts[name] = failure_counts.get(name, 0) + 1
+                if failure_counts[name] > MAX_RETRIES:
+                    result = f"error: {validated} -- giving up on '{name}' after {MAX_RETRIES} retries"
+                else:
+                    result = f"error: {validated} -- please retry with corrected arguments"
+
+            yield {"type": "tool_finished", "name": name, "result": str(result)}
+
+            messages.append({
+                "role": "tool",
+                "content": str(result),
+            })
+
+    yield {
+        "type": "error",
+        "text": "I couldn't complete that after several tool calls -- something may be wrong with my tool use.",
+    }
