@@ -50,6 +50,13 @@ MODIFY_COMMAND_PATTERNS = (
     r"\b(?:move|ren|rename|mkdir|md)\b",
 )
 
+READ_COMMAND_PATTERN = re.compile(
+    r"\b(?:Get-[A-Za-z-]+|Get-ChildItem|Get-Location|pwd|dir|ls|type|cat|"
+    r"Test-Path|Join-Path|Write-Output|Select-Object|Where-Object|"
+    r"Format-Table|Measure-Object|Sort-Object|ForEach-Object)\b",
+    re.IGNORECASE,
+)
+
 
 class PermissionDenied(Exception):
     """Raised when an operation was not approved for execution."""
@@ -63,7 +70,7 @@ def classify_command(command):
         return RiskTier.DESTRUCTIVE
     if any(re.search(pattern, command, re.IGNORECASE) for pattern in MODIFY_COMMAND_PATTERNS):
         return RiskTier.MODIFY
-    if re.search(r"(?:^|[|;&])\s*(?:Get-[A-Za-z-]+|Get-ChildItem|dir|ls|type|cat)\b", command, re.IGNORECASE):
+    if READ_COMMAND_PATTERN.search(command):
         return RiskTier.READ
     return RiskTier.MODIFY
 

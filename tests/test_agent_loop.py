@@ -146,3 +146,28 @@ def test_tool_execution_exception_handled_gracefully():
     assert "permissions issue" in result.lower()
     tool_messages = [m for m in messages if m.get("role") == "tool"]
     assert any("Access denied" in m["content"] for m in tool_messages)
+
+
+def test_unconfirmed_powershell_action_is_blocked():
+    import agent.tool_registry as registry_module
+
+    executed = []
+    responses = [
+        _fake_response(tool_calls=_tool_call(
+            "execute_powershell", {"command": "Remove-Item C:\\temp\\file.txt"}
+        )),
+    ]
+
+    def fake_chat(messages, tools=None):
+        return responses.pop(0)
+
+    with patch.object(loop_module, "chat", fake_chat), patch.object(
+        loop_module, "request_confirmation", return_value=False
+    ), patch.dict(
+        registry_module.TOOL_REGISTRY,
+        {"execute_powershell": lambda command: executed.append(command)},
+    ):
+        result = run_turn("delete the file", [])
+
+    assert result == "The action was not executed because confirmation was declined."
+    assert executed == []

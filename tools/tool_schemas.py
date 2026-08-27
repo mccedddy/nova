@@ -266,4 +266,31 @@ TOOL_SCHEMAS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_powershell",
+            "description": (
+                "Execute a PowerShell command when no existing native tool can fulfill "
+                "the request. Prefer the dedicated native tool whenever one exists. "
+                "Read-only commands may run automatically; commands that modify files, "
+                "processes, services, or system settings require user confirmation. "
+                "Returns command, stdout, stderr, exit code, and timeout status."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The exact PowerShell command to execute",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Maximum execution time in seconds (default 20, maximum 120)",
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+    },
 ]

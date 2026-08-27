@@ -77,6 +77,13 @@ def run_turn_events(user_input, messages):
                 "content": str(result),
             })
 
+            if permission_error:
+                yield {
+                    "type": "error",
+                    "text": "The action was not executed because confirmation was declined.",
+                }
+                return
+
     yield {
         "type": "error",
         "text": "I couldn't complete that after several tool calls -- something may be wrong with my tool use.",

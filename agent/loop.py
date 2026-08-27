@@ -90,4 +90,7 @@ def run_turn(user_input, messages, show_debug_tools=False, show_full_output=Fals
                 "content": str(result),
             })
 
+            if permission_error:
+                return "The action was not executed because confirmation was declined."
+
     return "I couldn't complete that after several tool calls -- something may be wrong with my tool use."

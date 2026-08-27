@@ -79,6 +79,10 @@ def test_non_read_operation_without_callback_is_blocked():
 
 def test_command_classifier_detects_known_risk_patterns():
     assert classify_command("Get-Process") is RiskTier.READ
+    assert classify_command("pwd") is RiskTier.READ
+    assert classify_command("Get-Service | Where-Object { $_.Status -eq 'Running' } | Select-Object Name") is RiskTier.READ
+    assert classify_command("$path = $env:TEMP\nTest-Path $path\nWrite-Output $path") is RiskTier.READ
+    assert classify_command("$path = $env:TEMP\nGet-Service | Select-Object Name") is RiskTier.READ
     assert classify_command("Move-Item C:\\old C:\\new") is RiskTier.MODIFY
     assert classify_command("Remove-Item C:\\temp\\file.txt") is RiskTier.DESTRUCTIVE
     assert classify_command("Set-ExecutionPolicy Bypass") is RiskTier.DESTRUCTIVE
