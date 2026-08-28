@@ -1,22 +1,21 @@
 import json
 import requests
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "qwen3.5:9b"
+from settings import MODEL, OLLAMA_REQUEST_TIMEOUT, OLLAMA_URL, NUM_CTX, NUM_PREDICT
 
 
 class OllamaUnavailableError(Exception):
     pass
 
 
-def chat(messages, tools=None, stream=False, timeout=120):
+def chat(messages, tools=None, stream=False, timeout=OLLAMA_REQUEST_TIMEOUT):
     payload = {
         "model": MODEL,
         "messages": messages,
         "stream": stream,
         "options": {
-            "num_ctx": 65536, #16384 32768 49152 65536 98304 131072 
-            "num_predict": 8192 #8192 or 4096 
+            "num_ctx": NUM_CTX,
+            "num_predict": NUM_PREDICT,
         },
     }
     if tools:

@@ -2,6 +2,7 @@ import subprocess
 import json
 import psutil
 from datetime import datetime, timedelta
+from settings import DISK_HEALTH_TIMEOUT, NVIDIA_SMI_TIMEOUT, SYSTEM_POWERSHELL_TIMEOUT
 
 
 def get_system_diagnostics():
@@ -64,7 +65,7 @@ def _get_os_info():
             ],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=SYSTEM_POWERSHELL_TIMEOUT,
         )
         if result.returncode != 0:
             return {"error": f"PowerShell call failed: {result.stderr.strip()}"}
@@ -118,7 +119,7 @@ def _get_gpu_info_wmi():
             ],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=SYSTEM_POWERSHELL_TIMEOUT,
         )
         if result.returncode != 0:
             return [{"error": f"PowerShell call failed: {result.stderr.strip()}"}]
@@ -152,7 +153,7 @@ def _try_nvidia_smi():
             ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=NVIDIA_SMI_TIMEOUT,
         )
         if result.returncode != 0:
             return None
@@ -170,7 +171,7 @@ def _try_nvidia_smi():
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=NVIDIA_SMI_TIMEOUT,
         )
         if result.returncode != 0:
             return None
@@ -195,7 +196,7 @@ def get_disk_health():
             ],
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=DISK_HEALTH_TIMEOUT,
         )
 
         if result.returncode != 0:

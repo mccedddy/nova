@@ -9,6 +9,7 @@ import requests
 
 from agent.loop_events import run_turn_events
 from agent.prompts import SYSTEM_PROMPT
+from settings import API_HEALTH_TIMEOUT
 
 app = FastAPI(title="N.O.V.A. API")
 
@@ -33,7 +34,7 @@ def _new_conversation():
 def health():
     ollama_ok = True
     try:
-        requests.get("http://localhost:11434", timeout=3)
+        requests.get("http://localhost:11434", timeout=API_HEALTH_TIMEOUT)
     except requests.exceptions.RequestException:
         ollama_ok = False
     return {"api": "ok", "ollama_reachable": ollama_ok}

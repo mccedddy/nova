@@ -3,6 +3,7 @@ import json
 import os
 import time
 from datetime import datetime
+from settings import FILESYSTEM_MAX_RESULTS, FILESYSTEM_TIMEOUT
 
 # Path fragments used to report temp/cache signals.
 TEMP_CACHE_PATTERNS = [
@@ -15,8 +16,8 @@ TEMP_CACHE_PATTERNS = [
     r"\appdata\local\bravesoftware\brave-browser\user data\default\cache",
 ]
 
-DEFAULT_TIMEOUT = 20
-MAX_RESULTS = 40
+DEFAULT_TIMEOUT = FILESYSTEM_TIMEOUT
+MAX_RESULTS = FILESYSTEM_MAX_RESULTS
 
 
 def search_files(pattern, root_path=None):

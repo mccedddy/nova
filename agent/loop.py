@@ -6,10 +6,7 @@ from agent.verification import annotate_verification_reminder, needs_verificatio
 from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
 from tools.tool_schemas import TOOL_SCHEMAS
-
-MAX_ITERATIONS = 50
-MAX_RETRIES = 2
-MAX_TERMINAL_CHARS = 1000
+from settings import MAX_ITERATIONS, MAX_RETRIES, MAX_TERMINAL_CHARS
 
 tool_call_counter = 0
 

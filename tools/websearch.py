@@ -5,15 +5,22 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from pathlib import Path
+from settings import (
+    LOCATION_LOOKUP_TIMEOUT,
+    WEB_FETCH_TIMEOUT,
+    WEB_MAX_PAGE_CHARS,
+    WEB_SEARCH_MAX_RESULTS,
+    WEB_SEARCH_TIMEOUT,
+)
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
 
-MAX_RESULTS = 5
-TIMEOUT = 12
+MAX_RESULTS = WEB_SEARCH_MAX_RESULTS
+TIMEOUT = WEB_SEARCH_TIMEOUT
 
-FETCH_TIMEOUT = 15
-MAX_PAGE_CHARS = 5000
+FETCH_TIMEOUT = WEB_FETCH_TIMEOUT
+MAX_PAGE_CHARS = WEB_MAX_PAGE_CHARS
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -225,7 +232,7 @@ def fetch_page(url, max_chars=8000):
 def get_approximate_location():
     # This is the only tool that sends the public IP to an external service.
     try:
-        response = requests.get("http://ip-api.com/json/", timeout=8)
+        response = requests.get("http://ip-api.com/json/", timeout=LOCATION_LOOKUP_TIMEOUT)
         response.raise_for_status()
         data = response.json()
 

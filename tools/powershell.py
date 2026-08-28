@@ -1,12 +1,13 @@
 import subprocess
 
+from settings import POWERSHELL_MAX_TIMEOUT, POWERSHELL_TIMEOUT
 
-DEFAULT_TIMEOUT = 20
+DEFAULT_TIMEOUT = POWERSHELL_TIMEOUT
 
 
 def execute_powershell(command, timeout=DEFAULT_TIMEOUT):
     """Run a PowerShell command and return structured process results."""
-    timeout = max(1, min(int(timeout), 120))
+    timeout = max(1, min(int(timeout), POWERSHELL_MAX_TIMEOUT))
     result = {
         "command": command,
         "stdout": "",

@@ -1,4 +1,5 @@
 import winreg
+from settings import REGISTRY_MAX_SUBKEYS, REGISTRY_MAX_VALUES
 
 # Restrict reads to the supported root hives.
 ALLOWED_HIVES = {
@@ -18,8 +19,8 @@ UNINSTALL_PATHS = [
     (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
 ]
 
-MAX_VALUES = 50
-MAX_SUBKEYS = 50
+MAX_VALUES = REGISTRY_MAX_VALUES
+MAX_SUBKEYS = REGISTRY_MAX_SUBKEYS
 
 
 def query_registry(key_path):
