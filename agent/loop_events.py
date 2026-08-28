@@ -1,6 +1,7 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.permissions import PermissionDenied, execute_tool
 from agent.recovery import annotate_command_failure, is_execution_failure
+from agent.verification import annotate_verification_reminder, needs_verification
 from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
 from tools.tool_schemas import TOOL_SCHEMAS
@@ -83,6 +84,8 @@ def run_turn_events(user_input, messages):
             if ok and is_execution_failure(name, result):
                 command_failure_counts[name] = command_failure_counts.get(name, 0) + 1
                 result = annotate_command_failure(result, command_failure_counts[name])
+            elif ok and needs_verification(name, validated):
+                result = annotate_verification_reminder(result)
 
             if not ok:
                 if permission_error:

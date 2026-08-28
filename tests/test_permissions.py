@@ -87,6 +87,8 @@ def test_command_classifier_detects_known_risk_patterns():
     assert classify_command("Remove-Item C:\\temp\\file.txt") is RiskTier.DESTRUCTIVE
     assert classify_command("Set-ExecutionPolicy Bypass") is RiskTier.DESTRUCTIVE
     assert classify_command("Restart-Computer") is RiskTier.DESTRUCTIVE
+    assert classify_command("Get-ChildItem C:\\$Recycle.Bin | ForEach-Object { $_.Delete() }") is RiskTier.DESTRUCTIVE
+    assert classify_command("Get-ChildItem | Set-Content output.txt") is RiskTier.DESTRUCTIVE
 
 
 def test_operation_classifier_is_conservative_for_unknown_tools():

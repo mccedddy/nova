@@ -36,6 +36,10 @@ DESTRUCTIVE_COMMAND_PATTERNS = (
     r"\breg(?:\.exe)?\s+delete\b",
     r"\b(?:del|erase|rd|rmdir)\b",
     r"\bClear-[A-Za-z-]+\b",
+    r"\.(?:Delete|Remove)\s*\(",
+    r"\[System\.IO\.(?:File|Directory)\]::(?:Delete|Move)\b",
+    r"\b(?:Set-Content|Add-Content|Out-File|Clear-Content|Export-Csv)\b",
+    r"(?:^|[;&|])\s*[^\r\n]+\s*[>]{1,2}\s*[^>\s]",
 )
 
 MODIFY_COMMAND_PATTERNS = (
