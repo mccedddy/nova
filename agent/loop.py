@@ -1,5 +1,5 @@
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
-from agent.progress import TOOL_PROGRESS_MESSAGES
+from agent.progress import format_tool_progress
 from agent.permissions import PermissionDenied, execute_tool, request_confirmation
 from agent.recovery import annotate_command_failure, is_execution_failure
 from agent.verification import annotate_verification_reminder, needs_verification
@@ -7,9 +7,11 @@ from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
 from tools.tool_schemas import TOOL_SCHEMAS
 
-MAX_ITERATIONS = 8
+MAX_ITERATIONS = 50
 MAX_RETRIES = 2
 MAX_TERMINAL_CHARS = 1000
+
+tool_call_counter = 0
 
 
 def _truncate_for_terminal(text, max_chars=MAX_TERMINAL_CHARS):
@@ -39,6 +41,8 @@ def _summarize_gathered_results(messages):
 
 
 def run_turn(user_input, messages, show_debug_tools=False, show_full_output=False):
+    global tool_call_counter
+
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
     command_failure_counts = {}
@@ -69,7 +73,8 @@ def run_turn(user_input, messages, show_debug_tools=False, show_full_output=Fals
             name = call["name"]
             args = call["arguments"]
 
-            print(f"\n{TOOL_PROGRESS_MESSAGES.get(name, 'Working...')}")
+            tool_call_counter += 1
+            print(format_tool_progress(tool_call_counter, name, args))
             if show_debug_tools:
                 print(f"\u2192 calling {name}({args})")
 

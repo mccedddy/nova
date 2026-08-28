@@ -6,7 +6,7 @@ from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
 from tools.tool_schemas import TOOL_SCHEMAS
 
-MAX_ITERATIONS = 8
+MAX_ITERATIONS = 50
 MAX_RETRIES = 2
 
 

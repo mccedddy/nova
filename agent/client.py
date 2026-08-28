@@ -15,7 +15,8 @@ def chat(messages, tools=None, stream=False, timeout=120):
         "messages": messages,
         "stream": stream,
         "options": {
-            "num_ctx": 32768, #32768 or 16384
+            "num_ctx": 65536, #16384 32768 49152 65536 98304 131072 
+            "num_predict": 8192 #8192 or 4096 
         },
     }
     if tools:
