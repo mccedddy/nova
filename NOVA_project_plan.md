@@ -197,7 +197,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 7 — Local Python API
+## Phase 7 — Local Python API (completed)
 **Goal:** Expose the agent core to web or desktop clients while keeping the terminal client working, without risking regressions to the terminal client in the process.
 **Done when:** A local HTTP client can submit a prompt, receive structured events and a final answer, and maintain an isolated conversation — while the terminal client continues to work exactly as before, unaffected by anything built in this phase.
 
@@ -215,7 +215,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 8 — Permission & Security Layer
+## Phase 8 — Permission & Security Layer (completed)
 **Goal:** Before any tool can modify or execute anything on the system, a deterministic, code-enforced permission layer must exist — one the model cannot bypass through phrasing, framing, or persuasion.
 **Done when:** Every tool or capability that can change system state is classified into a risk tier, and the classification and enforcement live entirely in Python code, not in system-prompt instructions the model is merely asked to follow.
 
@@ -224,12 +224,12 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 3. For dynamic command generation (Phase 9), the classifier needs to inspect the actual command/cmdlet being run (e.g. detect `Remove-Item`, `Format-*`, `Stop-Process`, `reg delete`, `Set-ExecutionPolicy`, `Restart-Computer` and similar patterns) and classify accordingly, since a model-generated command's risk can't be known just from which tool was called.
 4. Design the confirmation UX to state three things before asking: the plain-language action being proposed, the actual command/operation that will run, and the concrete impact (e.g. "37 files will be permanently deleted from C:\Users\you\Downloads"). Never a bare "are you sure?" with no context.
 5. Ensure a rejected/declined confirmation cleanly aborts the action and reports that back to the model as a normal tool result (e.g. "user declined this action"), so the agent loop can continue the conversation rather than crashing or hanging.
-6. This phase is a hard prerequisite for Phase 9 and Phase 14 — no tool or capability that can mutate the system, files, or the desktop should be built or wired into the agent loop before this layer exists and is tested.
+6. This phase is a hard prerequisite for Phase 9 — no tool or capability that can mutate the system or files should be built or wired into the agent loop before this layer exists and is tested.
 7. Write tests (mocked, no live model needed) confirming: READ-tier actions execute without any confirmation step; MODIFY/DESTRUCTIVE-tier actions correctly halt and wait for confirmation; a declined confirmation is handled gracefully; the classifier correctly identifies a sample of known-destructive command patterns.
 
 ---
 
-## Phase 9 — Dynamic PowerShell Execution
+## Phase 9 — Dynamic PowerShell Execution (completed)
 **Goal:** Move from a fixed set of predefined tools toward a smaller set of general-purpose primitives the model can compose dynamically, while keeping existing native tools as fast, reliable, deterministic shortcuts for known common operations.
 **Done when:** The model can successfully accomplish a task that has no dedicated native tool by generating and executing an appropriate PowerShell command, with the Phase 8 permission layer correctly gating anything beyond simple reads.
 
@@ -243,7 +243,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 10 — Search Escalation
+## Phase 10 — Search Escalation (completed)
 **Goal:** Make `web_search` an adaptive two-tier system, escalating to a stronger search method only when the first attempt is genuinely insufficient, rather than always paying the cost of multiple searches.
 **Done when:** A query that DDGS handles well returns from a single search tier; a query where DDGS results are weak or insufficient automatically escalates to the second tier without the model needing to explicitly decide to do so.
 
@@ -255,7 +255,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 11 — Failure Recovery Loop
+## Phase 11 — Failure Recovery Loop (completed)
 **Goal:** When a generated PowerShell command (Phase 9) fails, the agent should analyze the failure and attempt a fix or alternate approach automatically, rather than simply reporting the error and stopping.
 **Done when:** A deliberately malformed or outdated command, fed through the agent, results in the model correctly diagnosing the failure and either correcting the command or searching for the right approach, then successfully completing the original task.
 
@@ -267,7 +267,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 12 — Verification
+## Phase 12 — Verification (completed)
 **Goal:** Actions should be confirmed to have actually achieved their intended effect, not assumed successful just because a command returned without an error.
 **Done when:** After a state-changing action, the agent performs a follow-up check confirming the expected outcome before reporting success to the user.
 
@@ -278,56 +278,50 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 13 — Screen & Window Awareness
-**Goal:** Give the agent a perception layer beyond system/process state — visibility into what's actually displayed on screen and which application is focused.
-**Done when:** The agent can answer "what's on my screen right now" or "what's wrong with this error" style questions by capturing and interpreting the current screen state.
+## Phase 13 — Windows Desktop UI Client
+**Goal:** Replace the terminal as the primary everyday interface with a Windows desktop application that consumes the existing local API.
+**Done when:** The user can open the app, type a request, submit it with a button or keyboard shortcut, see tool progress and the final answer, and continue a conversation without using the terminal directly.
 
-1. Add `get_active_window()` (currently focused application/window title/process) and `get_open_windows()` (list of all open top-level windows) as new read-only tools.
-2. Add `take_screenshot()` to capture the current desktop or active window.
-3. Screenshot interpretation requires a vision-capable model — `qwen3.5:9b` is not vision-capable, so this phase requires either routing screenshot-analysis requests to a different, vision-capable model, or deferring full interpretation until Phase 16 (Model Routing) exists. Decide and document which approach is taken before building further on top of this capability.
-4. Combine active-window/open-window context with conversation history so references like "what's wrong here" or "in this window" can be resolved without the user needing to explicitly name the application.
-5. Treat all capabilities in this phase as READ-tier under the Phase 8 permission system — they only observe, never modify.
-
----
-
-## Phase 14 — GUI Automation
-**Goal:** Allow the agent to interact with applications that don't expose a usable CLI or API, through mouse and keyboard control grounded in actual visual/screen context rather than blind coordinates.
-**Done when:** The agent can carry out a simple, user-requested GUI action (e.g. "click Save," "close this dialog") by identifying the correct on-screen target via Phase 13's screen awareness, acting on it, and verifying the result.
-
-1. This phase requires Phase 8 (permission layer), Phase 12 (verification), and Phase 13 (screen awareness) to already exist — do not build GUI control ahead of any of those.
-2. Add GUI action primitives: `click(x, y)`, `double_click`, `right_click`, `type_text(text)`, `press_key(key)`, `hotkey(keys)`, `scroll(direction)`, `move_mouse(x, y)`.
-3. Every GUI action must be preceded by identifying the correct target through screen/vision context (a fresh screenshot plus vision-model interpretation) — never allow the model to invoke `click(x, y)` with self-generated coordinates it has no visual grounding for.
-4. Every GUI action is classified at minimum as MODIFY tier under Phase 8's permission system by default; individual actions may need DESTRUCTIVE-tier classification depending on context (e.g. clicking "Delete" in a confirmation dialog) — this classification logic will need real thought, since GUI actions are much harder to statically analyze than a PowerShell command string.
-5. Every GUI action must be followed by a verification step (a follow-up screenshot or state check, per Phase 12's pattern) confirming the action had the intended visible effect, before reporting success.
-6. Start with a narrow, well-tested set of simple actions (e.g. clicking a clearly identified button) before attempting more complex multi-step GUI workflows.
+1. Choose Electron as the Windows desktop shell. Build the interface with normal web technologies such as HTML, CSS, and JavaScript, optionally using React, Vue, or Svelte. Electron provides the desktop window, tray behavior, global shortcuts, and local process integration while preserving the CSS-based customization familiar from web development.
+2. Build the app as a separate client of Phase 7's API: the desktop UI sends requests to and receives events from the Python API. This is the reason the API exists; "separate client" means a separate interface process, not a duplicate agent loop. Do not copy agent logic into the desktop application.
+3. Add a main chat window with a prompt editor, submit/cancel controls, conversation history, tool-progress events, errors, and final answers.
+4. Let the user type a request first, then submit it with a configurable global shortcut such as `Alt+Space`. The shortcut should focus/show the prompt window; it must not silently submit unfinished text.
+5. Add a system-tray icon so the app can stay available without occupying the taskbar, with show/hide, quit, and shortcut settings.
+6. Keep the first version Windows-only and local-only. The UI communicates with `127.0.0.1`; it does not expose the API publicly. Keep frontend styling in ordinary CSS so colors, spacing, typography, layouts, themes, and animations remain easy to customize.
+7. Use CSS transitions, keyframes, or a frontend animation library for UI motion. Animate the shortcut flow so the window can reveal, slide, fade, or scale into view, and animate progress updates without blocking the chat workflow. Respect reduced-motion preferences and provide a setting to disable nonessential animation.
+8. Test the desktop client against a running API and confirm the terminal client still works independently.
 
 ---
 
-## Phase 15 — Proactive / Event-Driven Behavior
-**Goal:** Move the agent from purely reactive (only responds when asked) to proactive (notices and surfaces significant events on its own).
-**Done when:** A background monitoring process can detect a defined set of system events (app crash, disk nearly full, GPU overheating, network disconnect, sustained abnormal CPU usage) and surface a notification to the user without being explicitly asked.
+## Phase 14 — Desktop Settings & Operations
+**Goal:** Make the desktop application the practical control center for NOVA's configuration and local services.
+**Done when:** The user can inspect and change supported settings, start/restart the API, and view useful logs without editing source files or manually managing terminal processes.
 
-1. This requires a genuinely new architectural component — a background process or thread that runs independently of the request/response agent loop, since the existing loop only runs when the user sends a message.
-2. Define the initial set of events worth monitoring and their thresholds (e.g. disk free space below some percentage, GPU temperature above some value, a process crash detected via Windows Event Log).
-3. Decide how monitoring surfaces to the user — desktop notification, a message the next time they open the terminal/UI, or something else — and build the minimum viable version of that delivery mechanism.
-4. Keep monitoring read-only in this phase; proactive *action* (rather than proactive *notification*) is a much larger scope decision and should not be assumed as part of this phase.
-5. Test that monitoring doesn't introduce meaningful CPU/resource overhead of its own, given it will run continuously in the background.
-
----
-
-## Phase 16 — Model Routing
-**Goal:** Route different kinds of requests to the model best suited for them, rather than using one fixed model for every request type.
-**Done when:** Simple requests continue to use the fast local model by default, while requests genuinely requiring stronger reasoning or vision capability are automatically routed to a more appropriate model, without the user needing to specify which model to use.
-
-1. Define what distinguishes a "simple" task (current default routing) from a "complex" task (needs stronger reasoning) from a "vision" task (needs a vision-capable model, relevant to Phase 13/14).
-2. Build a routing decision — this could be a lightweight classification step before the main agent loop runs, or a heuristic based on which tools/capabilities a request appears to need.
-3. Decide on and integrate the actual alternate model(s) to route to — a larger local model, a different local model with vision support, or another option — this is a real infrastructure decision that needs to be made deliberately, not assumed.
-4. Ensure conversation history and context carry over correctly even when a mid-conversation request gets routed to a different model than a previous turn.
-5. Test routing decisions against a range of request types to confirm simple requests aren't unnecessarily routed to a slower/heavier model, and complex/vision requests aren't incorrectly kept on the fast default model.
+1. Make `settings.json` the user-editable source of runtime values, including model name, context size, prediction limit, iteration/retry limits, and tool timeouts. The Electron app reads and updates this JSON file; it must not rewrite Python source code.
+2. Keep `settings.py` as the Python loader and validator. It supplies documented defaults, allowed types/ranges, and the single effective configuration consumed by the API, agent loops, and tools. Missing or invalid JSON values fall back to defaults.
+3. Store the user file in a stable per-user location such as `%LOCALAPPDATA%\\NOVA\\settings.json` before packaging the application, so upgrades do not overwrite preferences. During development, a project-local `settings.json` may be used.
+4. Add Apply, Reset to Defaults, and restart-required indicators. Do not silently change a running process when a setting requires a server restart.
+5. Add API process controls: status, start, stop, and restart. Display clear errors when the server cannot start, is already running, or is unreachable.
+6. Add a log viewer with refresh, clear-display, level/filter controls, and bounded output. Do not expose secrets such as API keys in the UI.
+7. Add a diagnostics view for API health, Ollama reachability, selected model, and current configuration without exposing private system data unnecessarily.
+8. Test settings persistence, invalid values, server restart behavior, log truncation, and recovery when Ollama or the API is unavailable.
 
 ---
 
-## Phase 17 — Persistent Memory
+## Phase 15 — Voice Input & Output
+**Goal:** Add optional voice interaction as a separate layer on top of the stable desktop UI and API.
+**Done when:** The user can invoke voice capture, speak a request, see the transcribed text before submission, and optionally hear NOVA's response.
+
+1. Choose Windows-compatible speech-to-text and text-to-speech components deliberately. Prefer local processing where quality and hardware allow it; document any cloud service and its data implications before enabling it.
+2. Add push-to-talk or a clearly visible recording control. Do not submit audio-derived text without showing the transcript or giving the user a cancellation path.
+3. Reuse the Phase 13 prompt editor and API client. Voice should produce normal text requests rather than a second agent loop.
+4. Add optional text-to-speech playback with stop/replay controls and a setting to disable it.
+5. Handle microphone permission, missing devices, recognition errors, and service timeouts without blocking the desktop UI.
+6. Test voice as an optional feature so the text-only desktop workflow remains fully functional.
+
+---
+
+## Phase 16 — Persistent Memory
 **Goal:** Allow the agent to remember useful facts across sessions (e.g. "my projects are usually in C:\DEV"), separate from and in addition to the existing in-session conversation history.
 **Done when:** A fact stated in one session is correctly recalled and used in a later, separate session, while transient conversational statements are not incorrectly promoted into permanent memory.
 
@@ -340,20 +334,7 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ---
 
-## Phase 18 — Voice & Native UI
-**Goal:** Reduce reliance on a terminal/chat window as the only way to interact with the agent.
-**Done when:** The user can issue a spoken request and receive a spoken response, and/or invoke the agent through a lightweight always-available interface (global hotkey, tray icon) rather than needing an already-open terminal window.
-
-1. Add speech-to-text for voice input and text-to-speech for voice output — pick and integrate specific libraries/services for each; note that any cloud-based STT/TTS service would be a new external dependency worth being deliberate about, versus a fully local option if one exists with acceptable quality.
-2. Build a global hotkey listener that can summon the agent's interface regardless of what application currently has focus.
-3. Build a lightweight floating overlay or similar minimal UI as an alternative to a full terminal window for quick requests.
-4. Add a system tray presence so the agent can run persistently in the background rather than needing to be manually started each time.
-5. Add native OS notifications as a delivery mechanism, tying in with Phase 15's proactive behavior once that exists.
-6. This phase has the most dependencies on earlier phases already being solid (particularly Phase 7's API, since a native UI would likely be a separate client consuming that API rather than embedding the terminal logic directly) — treat as lowest priority among the future phases.
-
----
-
-## Phase 19 — Plugin System
+## Phase 17 — Plugin System
 **Goal:** Support application-specific integrations (e.g. VS Code, Discord, Spotify) as independently addable modules, rather than growing the core agent codebase indefinitely as more integrations are added.
 **Done when:** A new application-specific capability can be added as a self-contained module without modifying the core agent loop, tool registry pattern, or other unrelated tools.
 
@@ -368,8 +349,8 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 ## Explicitly out of scope until deliberately revisited
 
 - Public deployment or unauthenticated remote access to the API — stays bound to `127.0.0.1` until an explicit authentication/access-control decision is made and implemented.
-- Any capability in Phases 8 through 19 being started without a deliberate decision to begin that specific phase — none of this work should happen incidentally while working on something else.
-- Persistent memory/logging (Phase 17) remains out of scope until that phase is explicitly and separately decided on, independent of any other phase's progress.
+- Any capability in Phases 8 through 17 being started without a deliberate decision to begin that specific phase — none of this work should happen incidentally while working on something else.
+- Persistent memory/logging (Phase 16) remains out of scope until that phase is explicitly and separately decided on, independent of any other phase's progress.
 
 ---
 
@@ -390,10 +371,8 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 | 10 | Search escalation | Small–Medium |
 | 11 | Failure recovery loop | Medium |
 | 12 | Verification | Small–Medium |
-| 13 | Screen & window awareness | Medium |
-| 14 | GUI automation | Large |
-| 15 | Proactive/event-driven behavior | Large |
-| 16 | Model routing | Medium |
-| 17 | Persistent memory | Medium |
-| 18 | Voice & native UI | Large |
-| 19 | Plugin system | Medium |
+| 13 | Windows desktop UI client | Large |
+| 14 | Desktop settings & operations | Medium–Large |
+| 15 | Voice input & output | Medium–Large |
+| 16 | Persistent memory | Medium |
+| 17 | Plugin system | Medium |

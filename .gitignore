@@ -7,6 +7,7 @@ env/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 
 # Logs (tool-call debug output — may contain local paths, usernames)
 *.log
