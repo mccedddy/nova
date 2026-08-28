@@ -55,6 +55,7 @@ def test_event_loop_yields_tool_lifecycle_and_answer():
         "tool_finished",
         "answer",
     ]
+    assert result[0]["display"] == "1. Working"
     assert result[1]["result"] == "value"
     assert result[2]["text"] == "Done."
 

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>NOVA</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="shell" id="shell">
+    <header class="bar">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.2"
+                  stroke-dasharray="34 10" transform="rotate(-40 12 12)" />
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+        </svg>
+      </span>
+      <span class="title">NOVA</span>
+      <span class="hint" id="status-hint">Alt+Space to summon &middot; Esc to dismiss</span>
+    </header>
+
+    <main class="log" id="log" aria-live="polite">
+      <div class="log-content" id="log-content">
+        <div class="empty-state" id="empty-state">
+          <p>Nothing asked yet.</p>
+          <p class="empty-sub">Try &ldquo;is my disk healthy?&rdquo; or &ldquo;what's using my network right now?&rdquo;</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="foot">
+      <button type="button" id="new-convo" title="Start a new conversation">New conversation</button>
+      <span id="conn-dot" class="conn-dot" title="Checking API…"></span>
+    </footer>
+
+    <form class="composer" id="prompt-form" autocomplete="off">
+      <input
+        id="prompt-input"
+        type="text"
+        placeholder="Ask NOVA about this system…"
+        aria-label="Ask NOVA"
+      />
+    </form>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

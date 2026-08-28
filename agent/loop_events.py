@@ -4,6 +4,7 @@ from agent.recovery import annotate_command_failure, is_execution_failure
 from agent.verification import annotate_verification_reminder, needs_verification
 from agent.tool_registry import TOOL_REGISTRY
 from agent.validation import validate_tool_call
+from agent.progress import format_tool_progress
 from tools.tool_schemas import TOOL_SCHEMAS
 from settings import MAX_ITERATIONS, MAX_RETRIES
 
@@ -30,6 +31,7 @@ def run_turn_events(user_input, messages):
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
     command_failure_counts = {}
+    tool_call_counter = 0
 
     for _ in range(MAX_ITERATIONS):
         try:
@@ -62,8 +64,14 @@ def run_turn_events(user_input, messages):
         for call in tool_calls:
             name = call["name"]
             args = call["arguments"]
+            tool_call_counter += 1
 
-            yield {"type": "tool_started", "name": name, "args": args}
+            yield {
+                "type": "tool_started",
+                "name": name,
+                "args": args,
+                "display": format_tool_progress(tool_call_counter, name, args),
+            }
 
             ok, validated = validate_tool_call(name, args, TOOL_REGISTRY, TOOL_SCHEMAS)
             permission_error = False

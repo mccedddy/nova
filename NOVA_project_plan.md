@@ -295,16 +295,18 @@ Suggested build order (easiest/lowest-risk first, so you're validating the loop 
 
 ## Phase 14 — Desktop Settings & Operations
 **Goal:** Make the desktop application the practical control center for NOVA's configuration and local services.
-**Done when:** The user can inspect and change supported settings, start/restart the API, and view useful logs without editing source files or manually managing terminal processes.
+**Done when:** The user can inspect and change supported settings, manage Ollama and the Python API, and view useful process output without editing source files or manually managing terminal processes.
 
 1. Make `settings.json` the user-editable source of runtime values, including model name, context size, prediction limit, iteration/retry limits, and tool timeouts. The Electron app reads and updates this JSON file; it must not rewrite Python source code.
 2. Keep `settings.py` as the Python loader and validator. It supplies documented defaults, allowed types/ranges, and the single effective configuration consumed by the API, agent loops, and tools. Missing or invalid JSON values fall back to defaults.
 3. Store the user file in a stable per-user location such as `%LOCALAPPDATA%\\NOVA\\settings.json` before packaging the application, so upgrades do not overwrite preferences. During development, a project-local `settings.json` may be used.
 4. Add Apply, Reset to Defaults, and restart-required indicators. Do not silently change a running process when a setting requires a server restart.
-5. Add API process controls: status, start, stop, and restart. Display clear errors when the server cannot start, is already running, or is unreachable.
-6. Add a log viewer with refresh, clear-display, level/filter controls, and bounded output. Do not expose secrets such as API keys in the UI.
-7. Add a diagnostics view for API health, Ollama reachability, selected model, and current configuration without exposing private system data unnecessarily.
-8. Test settings persistence, invalid values, server restart behavior, log truncation, and recovery when Ollama or the API is unavailable.
+5. Add Ollama process controls: detect whether Ollama is running, start the Ollama server, stop it, and show its current status. Do not start a second Ollama process when one is already running.
+6. Capture and display Ollama server output in a bounded, scrollable log panel with clear-display, pause/resume, refresh, and filter controls. Preserve enough recent output for diagnosing startup, model-loading, and connection problems.
+7. Add Python API process controls: status, start, stop, and restart. Display clear errors when the API cannot start, is already running, exits unexpectedly, or is unreachable.
+8. Capture and display Python API output in a separate bounded log panel. Keep Ollama logs and API logs visibly distinct, and do not expose secrets such as API keys in the UI.
+9. Add a diagnostics view for API health, Ollama reachability, selected model, and current configuration without exposing private system data unnecessarily.
+10. Test settings persistence, invalid values, process detection, duplicate-start prevention, graceful stop/restart behavior, log truncation, unexpected process exits, and recovery when Ollama or the API is unavailable.
 
 ---
 
