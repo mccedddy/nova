@@ -128,6 +128,7 @@
   }
 
   function addAnswerBubble(text) {
+    console.log(text);
     clearEmptyState();
 
     const row = document.createElement("div");
@@ -135,7 +136,8 @@
 
     const bubble = document.createElement("div");
     bubble.className = "bubble answer";
-    bubble.textContent = text;
+    bubble.innerHTML = marked.parse(text);
+    console.log(text);
 
     row.appendChild(bubble);
     logContent.appendChild(row);

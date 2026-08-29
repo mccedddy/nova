@@ -475,3 +475,124 @@ body {
     max-width: 96%;
   }
 }
+
+/* Markdown */
+.bubble.answer {
+  line-height: 1.6;
+}
+
+.bubble.answer p {
+  margin: 0 0 12px;
+}
+
+.bubble.answer p:last-child {
+  margin-bottom: 0;
+}
+
+.bubble.answer h1,
+.bubble.answer h2,
+.bubble.answer h3,
+.bubble.answer h4,
+.bubble.answer h5,
+.bubble.answer h6 {
+  margin: 20px 0 10px;
+  line-height: 1.3;
+}
+
+.bubble.answer h1 {
+  font-size: 1.6em;
+}
+
+.bubble.answer h2 {
+  font-size: 1.35em;
+}
+
+.bubble.answer h3 {
+  font-size: 1.15em;
+}
+
+.bubble.answer ul,
+.bubble.answer ol {
+  margin: 8px 0 12px;
+  padding-left: 24px;
+}
+
+.bubble.answer li {
+  margin: 4px 0;
+}
+
+/* Inline code */
+.bubble.answer code {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(127, 127, 127, 0.15);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+/* Code blocks */
+.bubble.answer pre {
+  margin: 14px 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: #1e1e1e;
+}
+
+.bubble.answer pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+/* Tables */
+.bubble.answer table {
+  width: 100%;
+  margin: 14px 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.bubble.answer th,
+.bubble.answer td {
+  padding: 8px 12px;
+  text-align: left;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+}
+
+.bubble.answer th {
+  font-weight: 600;
+  background: rgba(127, 127, 127, 0.12);
+}
+
+/* Blockquotes */
+.bubble.answer blockquote {
+  margin: 14px 0;
+  padding: 8px 16px;
+  border-left: 3px solid rgba(127, 127, 127, 0.5);
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.bubble.answer blockquote p {
+  margin: 0;
+}
+
+/* Horizontal rule */
+.bubble.answer hr {
+  margin: 20px 0;
+  border: 0;
+  border-top: 1px solid rgba(127, 127, 127, 0.3);
+}
+
+/* Links */
+.bubble.answer a {
+  text-decoration: underline;
+}
+
+/* Images */
+.bubble.answer img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
