@@ -383,6 +383,7 @@ body {
 }
 
 .conn-dot.ok { background: var(--accent-read); }
+.conn-dot.warning { background: var(--accent-modify); }
 .conn-dot.down { background: var(--accent-destructive); }
 
 @media (max-width: 560px) {

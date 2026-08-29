@@ -213,20 +213,30 @@
   async function pollHealth() {
     try {
       const result = await window.nova.health();
-      if (result.ok) {
-        connDot.classList.add("ok");
-        connDot.classList.remove("down");
-        connDot.title = "NOVA API connected";
-        statusHint.textContent = "Alt+Space to summon · Esc to dismiss";
-      } else {
+      connDot.classList.remove("ok", "warning", "down");
+
+      if (!result || result.ok === false) {
         connDot.classList.add("down");
-        connDot.classList.remove("ok");
-        connDot.title = result.error || "NOVA API unreachable";
-        statusHint.textContent = "API unreachable -- is the NOVA server running?";
+        connDot.title = `NOVA API unreachable. Is the NOVA server running?\nStart it with 'python -m api.server'`;
+        statusHint.textContent = "API unreachable · is the NOVA server running?";
+        return;
       }
+
+      if (result.ollama_reachable === false) {
+        connDot.classList.add("warning");
+        connDot.title = `NOVA API connected.\n\nOllama is unreachable. Is the Ollama server running?\nStart it with 'ollama serve'`;
+        statusHint.textContent = "Ollama unreachable · is the Ollama server running?";
+        return;
+      }
+
+      connDot.classList.add("ok");
+      connDot.title = "NOVA API and Ollama connected";
+      statusHint.textContent = "Alt+Space to summon · Esc to dismiss";
     } catch {
+      connDot.classList.remove("ok", "warning");
       connDot.classList.add("down");
-      connDot.classList.remove("ok");
+      connDot.title = `NOVA API unreachable. Is the NOVA server running?\nStart it with 'python -m api.server'`;
+      statusHint.textContent = "API unreachable · is the NOVA server running?";
     }
   }
 
