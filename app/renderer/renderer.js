@@ -382,6 +382,8 @@
       return;
     }
 
+    const fitAddon = new window.FitAddon.FitAddon();
+
     const terminal = new window.Terminal({
       cursorBlink: true,
       cursorStyle: "block",
@@ -396,7 +398,19 @@
       },
     });
 
+    terminal.loadAddon(fitAddon);
+
     terminal.open(container);
+
+    // Initial sizing
+    fitAddon.fit();
+
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+    });
+
+    resizeObserver.observe(container);
+
 
     terminal.write("Starting NOVA terminal...\r\n");
 
@@ -407,6 +421,8 @@
     terminals.set(id, {
       terminal,
       container,
+      fitAddon,
+      resizeObserver,
     });
 
     window.nova
