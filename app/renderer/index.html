@@ -2,70 +2,372 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' 'unsafe-inline';"
+  />
+
   <title>NOVA</title>
+
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="vendor/xterm.css" />
 </head>
+
 <body>
   <div class="shell" id="shell">
+
     <header class="bar">
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="16" height="16">
-          <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.2"
-                  stroke-dasharray="34 10" transform="rotate(-40 12 12)" />
-          <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+          <circle
+            cx="12"
+            cy="12"
+            r="7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-dasharray="34 10"
+            transform="rotate(-40 12 12)"
+          />
+          <circle
+            cx="12"
+            cy="12"
+            r="2.4"
+            fill="currentColor"
+          />
         </svg>
       </span>
+
       <span class="title">NOVA</span>
-      <span class="hint" id="status-hint">Alt+Space to summon &middot; Esc to dismiss</span>
+
+      <span class="hint" id="status-hint">
+        Alt+Space to summon &middot; Esc to dismiss
+      </span>
     </header>
-    
+
+
     <div class="layout-shell">
-      <aside class="sidebar" id="sidebar" aria-label="NOVA controls">
-        <div class="sidebar-top" aria-hidden="true"></div>
 
-        <div class="sidebar-actions">
-          <div class="status-block" title="Checking API…">
-            <span id="conn-dot" class="conn-dot" title="Checking API…"></span>
-          </div>
+      <!-- ========================================================= -->
+      <!-- SIDEBAR -->
+      <!-- ========================================================= -->
 
-          <button type="button" id="new-convo" title="Start a new conversation" aria-label="Start a new conversation">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-              <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6v-2z" fill="currentColor"/>
+      <aside
+        class="sidebar"
+        id="sidebar"
+        aria-label="NOVA controls"
+      >
+
+        <div class="sidebar-top">
+
+          <!-- CHAT -->
+          <button
+            type="button"
+            class="sidebar-button"
+            id="chat-button"
+            title="Chat"
+            aria-label="Chat"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path
+                d="M20 2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h4v3l4-3h8c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 16h-8.67L10 19.5V18H4V4h16v14zM6 8h12v2H6V8zm0 4h9v2H6v-2z"
+                fill="currentColor"
+              />
             </svg>
           </button>
+
+
+          <span
+            class="sidebar-divider"
+            aria-hidden="true"
+          ></span>
+
+
+          <!-- TERMINAL 1 -->
+          <button
+            type="button"
+            class="sidebar-button"
+            id="terminal-1-button"
+            title="Terminal 1"
+            aria-label="Terminal 1"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2v12h16V6H4zm2.5 2.5L10 12l-3.5 3.5L5.1 14l2-2-2-2 1.4-1.5zM11 14h6v2h-6v-2z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+
+
+          <!-- TERMINAL 2 -->
+          <button
+            type="button"
+            class="sidebar-button"
+            id="terminal-2-button"
+            title="Terminal 2"
+            aria-label="Terminal 2"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2v12h16V6H4zm2.5 2.5L10 12l-3.5 3.5L5.1 14l2-2-2-2 1.4-1.5zM11 14h6v2h-6v-2z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+
+
+          <span
+            class="sidebar-divider"
+            aria-hidden="true"
+          ></span>
+
+
+          <!-- SETTINGS -->
+          <button
+            type="button"
+            class="sidebar-button"
+            id="settings-button"
+            title="Settings"
+            aria-label="Settings"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path
+                d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.2 7.2 0 0 0-1.69-.98L15 3h-6l-.36 2.93c-.61.25-1.18.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65 2 3.46 2.49-1c.51.4 1.08.73 1.69.98L9 21h6l.36-2.93c.61-.25 1.18-.58 1.69-.98l2.49 1 2-3.46-2.11-1.65zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+
         </div>
+
+
+        <!-- SIDEBAR BOTTOM -->
+        <div class="sidebar-bottom">
+
+          <!-- NEW CONVERSATION -->
+          <button
+            type="button"
+            class="sidebar-button"
+            id="new-convo"
+            title="Start a new conversation"
+            aria-label="Start a new conversation"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path
+                d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6v-2z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+
+
+          <!-- CONNECTION STATUS -->
+          <div
+            class="status-block"
+            title="Checking API…"
+          >
+            <span
+              id="conn-dot"
+              class="conn-dot"
+              title="Checking API…"
+            ></span>
+          </div>
+
+        </div>
+
       </aside>
 
-      <div class="content" id="content">
-        <main class="log" id="log" aria-live="polite">
-          <div class="log-content" id="log-content">
-            <div class="empty-state" id="empty-state">
-              <p>Nothing asked yet.</p>
-              <p class="empty-sub">Try &ldquo;is my disk healthy?&rdquo; or &ldquo;what's using my network right now?&rdquo;</p>
-            </div>
-          </div>
-        </main>
 
-        <form class="composer" id="prompt-form" autocomplete="off">
-          <div class="composer-shell">
-            <textarea
-              id="prompt-input"
-              rows="1"
-              placeholder="Ask NOVA about this system…"
-              aria-label="Ask NOVA"
-            ></textarea>
-            <button type="submit" id="send-button" aria-label="Send message">
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                <path d="M3 20V4l18 8-18 8zm2-2.5 12.3-5.5L5 6.5v3.9l6 1.6-6 1.6v3.9z" fill="currentColor"/>
-              </svg>
-            </button>
+      <!-- ========================================================= -->
+      <!-- MAIN CONTENT -->
+      <!-- ========================================================= -->
+
+      <div class="content" id="content">
+
+
+        <!-- ======================================================= -->
+        <!-- CHAT VIEW -->
+        <!-- ======================================================= -->
+
+        <div
+          id="chat-view"
+          class="view chat-view"
+        >
+
+          <main
+            class="log"
+            id="log"
+            aria-live="polite"
+          >
+
+            <div
+              class="log-content"
+              id="log-content"
+            >
+
+              <div
+                class="empty-state"
+                id="empty-state"
+              >
+                <p>Nothing asked yet.</p>
+
+                <p class="empty-sub">
+                  Try &ldquo;is my disk healthy?&rdquo; or
+                  &ldquo;what's using my network right now?&rdquo;
+                </p>
+              </div>
+
+            </div>
+
+          </main>
+
+
+          <!-- CHAT COMPOSER -->
+          <form
+            class="composer"
+            id="prompt-form"
+            autocomplete="off"
+          >
+
+            <div class="composer-shell">
+
+              <textarea
+                id="prompt-input"
+                rows="1"
+                placeholder="Ask NOVA about this system…"
+                aria-label="Ask NOVA"
+              ></textarea>
+
+
+              <button
+                type="submit"
+                id="send-button"
+                aria-label="Send message"
+              >
+
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 20V4l18 8-18 8zm2-2.5 12.3-5.5L5 6.5v3.9l6 1.6-6 1.6v3.9z"
+                    fill="currentColor"
+                  />
+                </svg>
+
+              </button>
+
+            </div>
+
+          </form>
+
+        </div>
+
+
+        <!-- ======================================================= -->
+        <!-- TERMINAL 1 VIEW -->
+        <!-- ======================================================= -->
+
+        <div
+          id="terminal-1-view"
+          class="view terminal-view"
+          hidden
+        >
+          <div class="terminal-header">
+            <span>Terminal 1</span>
           </div>
-        </form>
+
+          <div
+            id="terminal-1-container"
+            class="terminal-container"
+          ></div>
+        </div>
+
+
+        <!-- ======================================================= -->
+        <!-- TERMINAL 2 VIEW -->
+        <!-- ======================================================= -->
+
+        <div
+          id="terminal-2-view"
+          class="view terminal-view"
+          hidden
+        >
+          <div class="terminal-header">
+            <span>Terminal 2</span>
+          </div>
+
+          <div
+            id="terminal-2-container"
+            class="terminal-container"
+          ></div>
+        </div>
+
+
+        <!-- ======================================================= -->
+        <!-- SETTINGS VIEW -->
+        <!-- ======================================================= -->
+
+        <div
+          id="settings-view"
+          class="view settings-view"
+          hidden
+        >
+
+          <div class="settings-header">
+            <span>Settings</span>
+          </div>
+
+          <div class="settings-body">
+
+            <div class="settings-placeholder">
+              <p>Settings</p>
+
+              <p class="empty-sub">
+                NOVA settings will appear here.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+
+
       </div>
     </div>
   </div>
 
+
+  <script src="vendor/xterm.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

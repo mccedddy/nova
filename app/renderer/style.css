@@ -41,6 +41,44 @@
     display: none;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.terminal-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-header {
+  height: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--muted-text, #8b919a);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.terminal-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px;
+  background: #0b0d10;
+}
+
+.terminal-container .xterm {
+  height: 100%;
+}
+
+.terminal-container .xterm-viewport {
+  overflow-y: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
@@ -92,19 +130,28 @@ body {
   justify-content: space-between;
   border-right: 1px solid var(--border-soft);
   background: rgba(255, 255, 255, 0.01);
-  padding: 14px 16px 16px;
+  /* padding: 14px 16px 16px; */
 }
 
 .sidebar-top {
-  flex: 1 1 auto;
-}
-
-.sidebar-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding-top: 8px;
+  padding: 10px 14px 0px 14px;
+}
+
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0px 14px 10px 14px;
+}
+
+.sidebar-divider {
+  border: 1px solid var(--border);
+  width: 100%;
 }
 
 .status-block {
@@ -112,6 +159,7 @@ body {
   align-items: center;
   justify-content: center;
   width: 100%;
+  margin: 10px;
 }
 
 .content {
@@ -230,6 +278,21 @@ body {
 }
 
 /* -- Log -- */
+#chat-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#chat-view .log {
+  flex: 1;
+  min-height: 0;
+}
+
+#chat-view .composer {
+  flex-shrink: 0;
+}
 
 .log {
   flex: 1 1 auto;
@@ -351,7 +414,7 @@ body {
 
 /* -- Footer -- */
 
-#new-convo {
+.sidebar-button {
   width: 30px;
   height: 30px;
   display: inline-flex;
@@ -366,10 +429,14 @@ body {
   transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
 }
 
-#new-convo:hover {
+#sidebar-button:hover {
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--border);
+}
+
+.sidebar-button.active {
+  opacity: 1;
 }
 
 .conn-dot {

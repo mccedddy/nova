@@ -4,6 +4,8 @@ const path = require("path");
 const { loadSettings, saveSettings } = require("./settings");
 const { checkHealth, streamChat, ApiError } = require("./api-client");
 
+const { spawn } = require("node-pty");
+
 // This is Phase 13: a separate client of the Phase 7 API. No agent logic
 // lives here -- this file only talks to the API and renders the UI. Do not
 // import or re-implement anything from agent/ or tools/ in this process.
@@ -134,7 +136,193 @@ app.on("window-all-closed", (event) => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  killAllTerminals();
 });
+
+// -----------------------------------------------------------------------------
+// TERMINALS
+// -----------------------------------------------------------------------------
+
+const terminals = new Map();
+
+const TERMINAL_CONFIG = {
+  1: {
+    cwd: "C:\\DEV\\nova",
+  },
+  2: {
+    cwd: "C:\\DEV\\nova",
+  },
+};
+
+function getVenvPath() {
+  // Your Electron app is:
+  // C:\DEV\nova\app
+  //
+  // If your venv is:
+  // C:\DEV\nova\venv
+  //
+  // then ..\venv is correct.
+  return path.resolve(__dirname, "..", "venv", "Scripts", "Activate.ps1");
+}
+
+function startTerminal(id) {
+  const terminalId = String(id);
+
+  // Don't create another PowerShell process if this terminal
+  // is already running.
+  if (terminals.has(terminalId)) {
+    return {
+      ok: true,
+      alreadyRunning: true,
+    };
+  }
+
+  // THIS was the missing variable.
+  const config = TERMINAL_CONFIG[terminalId];
+
+  if (!config) {
+    return {
+      ok: false,
+      error: `Unknown terminal: ${terminalId}`,
+    };
+  }
+
+  const venvPath = getVenvPath();
+
+  const command = [
+    `Set-Location -LiteralPath '${config.cwd}'`,
+    `$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()`,
+    `if (Test-Path -LiteralPath '${venvPath}') { . '${venvPath}' }`,
+  ].join("; ");
+
+  console.log(`[Terminal ${terminalId}] Starting`);
+  console.log(`[Terminal ${terminalId}] CWD: ${config.cwd}`);
+  console.log(`[Terminal ${terminalId}] Venv: ${venvPath}`);
+
+  const ptyProcess = spawn(
+    "powershell.exe",
+    [
+      "-NoLogo",
+      "-NoExit",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      command,
+    ],
+    {
+      name: "xterm-256color",
+      cols: 100,
+      rows: 30,
+      cwd: config.cwd,
+      env: {
+        ...process.env,
+        TERM_PROGRAM: "NOVA",
+      },
+    }
+  );
+
+  terminals.set(terminalId, ptyProcess);
+
+  ptyProcess.onData((data) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    mainWindow.webContents.send("nova:terminal-data", {
+      id: terminalId,
+      data,
+    });
+  });
+
+  ptyProcess.onExit(({ exitCode, signal }) => {
+    console.log(
+      `[Terminal ${terminalId}] exited: code=${exitCode}, signal=${signal}`
+    );
+
+    terminals.delete(terminalId);
+
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    mainWindow.webContents.send("nova:terminal-exit", {
+      id: terminalId,
+      exitCode,
+      signal,
+    });
+  });
+
+  return {
+    ok: true,
+    alreadyRunning: false,
+  };
+}
+
+function writeTerminal(id, data) {
+  const terminalId = String(id);
+  const terminal = terminals.get(terminalId);
+
+  if (!terminal) {
+    return {
+      ok: false,
+      error: `Terminal ${terminalId} is not running.`,
+    };
+  }
+
+  terminal.write(data);
+
+  return {
+    ok: true,
+  };
+}
+
+function resizeTerminal(id, cols, rows) {
+  const terminal = terminals.get(String(id));
+
+  if (!terminal) {
+    return;
+  }
+
+  if (
+    Number.isInteger(cols) &&
+    Number.isInteger(rows) &&
+    cols > 0 &&
+    rows > 0
+  ) {
+    terminal.resize(cols, rows);
+  }
+}
+
+function killTerminal(id) {
+  const terminalId = String(id);
+  const terminal = terminals.get(terminalId);
+
+  if (!terminal) {
+    return;
+  }
+
+  try {
+    terminal.kill();
+  } catch {
+    // Ignore cleanup errors.
+  }
+
+  terminals.delete(terminalId);
+}
+
+function killAllTerminals() {
+  for (const [id, terminal] of terminals) {
+    try {
+      terminal.kill();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
+    console.log(`[Terminal ${id}] killed`);
+  }
+
+  terminals.clear();
+}
 
 // ---- IPC: renderer <-> API -------------------------------------------------
 
@@ -180,4 +368,22 @@ ipcMain.on("nova:send", async (event, { message, requestId }) => {
 
 ipcMain.on("nova:new-conversation", () => {
   currentConversationId = null;
+});
+
+// ---- IPC: terminals ---------------------------------------------------------
+
+ipcMain.handle("nova:terminal-start", (_event, id) => {
+  return startTerminal(id);
+});
+
+ipcMain.on("nova:terminal-input", (_event, { id, data }) => {
+  writeTerminal(id, data);
+});
+
+ipcMain.on("nova:terminal-resize", (_event, { id, cols, rows }) => {
+  resizeTerminal(id, cols, rows);
+});
+
+ipcMain.on("nova:terminal-kill", (_event, id) => {
+  killTerminal(id);
 });
