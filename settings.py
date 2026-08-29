@@ -12,7 +12,7 @@ DEFAULTS = {
 	"ollama_url": "http://localhost:11434/api/chat",
 	"model": "qwen3.5:9b",
 	"ollama_request_timeout": 120,
-	"num_ctx": 65536,
+	"num_ctx": 229376,
 	"num_predict": 8192,
 	"max_iterations": 50,
 	"max_retries": 2,

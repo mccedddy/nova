@@ -488,7 +488,7 @@
           "Start it with 'python -m api.server'";
 
         statusHint.textContent =
-          "API unreachable · is the NOVA server running?";
+          "API unreachable · Start it with 'python -m api.server'";
 
         return;
       }
@@ -502,7 +502,7 @@
           "Start it with 'ollama serve'";
 
         statusHint.textContent =
-          "Ollama unreachable · is the Ollama server running?";
+          "Ollama unreachable · Start it with 'ollama serve'";
 
         return;
       }
@@ -524,7 +524,7 @@
         "Start it with 'python -m api.server'";
 
       statusHint.textContent =
-        "API unreachable · is the NOVA server running?";
+        "API unreachable · Start it with 'python -m api.server'";
     }
   }
 
