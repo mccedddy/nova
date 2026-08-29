@@ -19,29 +19,51 @@
       <span class="title">NOVA</span>
       <span class="hint" id="status-hint">Alt+Space to summon &middot; Esc to dismiss</span>
     </header>
+    
+    <div class="layout-shell">
+      <aside class="sidebar" id="sidebar" aria-label="NOVA controls">
+        <div class="sidebar-top" aria-hidden="true"></div>
 
-    <main class="log" id="log" aria-live="polite">
-      <div class="log-content" id="log-content">
-        <div class="empty-state" id="empty-state">
-          <p>Nothing asked yet.</p>
-          <p class="empty-sub">Try &ldquo;is my disk healthy?&rdquo; or &ldquo;what's using my network right now?&rdquo;</p>
+        <div class="sidebar-actions">
+          <div class="status-block" title="Checking API…">
+            <span id="conn-dot" class="conn-dot" title="Checking API…"></span>
+          </div>
+
+          <button type="button" id="new-convo" title="Start a new conversation" aria-label="Start a new conversation">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6v-2z" fill="currentColor"/>
+            </svg>
+          </button>
         </div>
+      </aside>
+
+      <div class="content" id="content">
+        <main class="log" id="log" aria-live="polite">
+          <div class="log-content" id="log-content">
+            <div class="empty-state" id="empty-state">
+              <p>Nothing asked yet.</p>
+              <p class="empty-sub">Try &ldquo;is my disk healthy?&rdquo; or &ldquo;what's using my network right now?&rdquo;</p>
+            </div>
+          </div>
+        </main>
+
+        <form class="composer" id="prompt-form" autocomplete="off">
+          <div class="composer-shell">
+            <textarea
+              id="prompt-input"
+              rows="1"
+              placeholder="Ask NOVA about this system…"
+              aria-label="Ask NOVA"
+            ></textarea>
+            <button type="submit" id="send-button" aria-label="Send message">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="M3 20V4l18 8-18 8zm2-2.5 12.3-5.5L5 6.5v3.9l6 1.6-6 1.6v3.9z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+        </form>
       </div>
-    </main>
-
-    <footer class="foot">
-      <button type="button" id="new-convo" title="Start a new conversation">New conversation</button>
-      <span id="conn-dot" class="conn-dot" title="Checking API…"></span>
-    </footer>
-
-    <form class="composer" id="prompt-form" autocomplete="off">
-      <input
-        id="prompt-input"
-        type="text"
-        placeholder="Ask NOVA about this system…"
-        aria-label="Ask NOVA"
-      />
-    </form>
+    </div>
   </div>
 
   <script src="renderer.js"></script>

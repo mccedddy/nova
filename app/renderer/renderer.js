@@ -18,6 +18,12 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  function resizeInput() {
+    input.style.height = "auto";
+    const maxHeight = 160;
+    input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
+  }
+
   function clearEmptyState() {
     if (emptyState.parentElement) emptyState.remove();
   }
@@ -130,8 +136,13 @@
       case "answer":
         addAnswerBubble(evt.text || "");
         break;
+      // case "error":
+      //   addErrorLine(evt.message || "Something went wrong.");
+      //   break;
       case "error":
-        addErrorLine(evt.message || "Something went wrong.");
+        // Fallback to converting the entire object to text if message is missing
+        const errorText = evt.message || evt.text || JSON.stringify(evt);
+        addErrorLine(errorText);
         break;
       default:
         // Unknown/future event types (e.g. a Phase 8 confirmation prompt)
@@ -150,6 +161,7 @@
       activeRequestId = null;
       input.disabled = false;
       input.focus();
+      resizeInput();
     }
   });
 
@@ -165,11 +177,21 @@
 
     addUserBubble(text);
     input.value = "";
+    resizeInput();
     input.disabled = true;
 
     requestCounter += 1;
     activeRequestId = String(requestCounter);
     window.nova.send(text, activeRequestId);
+  });
+
+  input.addEventListener("input", resizeInput);
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
   });
 
   document.addEventListener("keydown", (e) => {
@@ -210,5 +232,6 @@
 
   pollHealth();
   setInterval(pollHealth, 15000);
+  resizeInput();
   input.focus();
 })();
