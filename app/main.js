@@ -349,12 +349,25 @@ ipcMain.on("nova:send", async (event, { message, requestId }) => {
   const sender = event.sender;
 
   try {
-    await streamChat(settings.apiBaseUrl, message, currentConversationId, (nova_event) => {
-      if (nova_event.conversation_id) {
-        currentConversationId = nova_event.conversation_id;
+    await streamChat(
+      settings.apiBaseUrl,
+      message,
+      currentConversationId,
+      (nova_event) => {
+        console.log("NOVA EVENT:", nova_event);
+
+        if (nova_event.type === "conversation_id" && nova_event.id) {
+          currentConversationId = nova_event.id;
+          console.log("SAVED CONVERSATION ID:", currentConversationId);
+        }
+
+        sender.send("nova:event", {
+          requestId,
+          ...nova_event,
+        });
       }
-      sender.send("nova:event", { requestId, ...nova_event });
-    });
+    );
+
     sender.send("nova:stream-end", { requestId });
   } catch (err) {
     sender.send("nova:event", {
@@ -362,6 +375,7 @@ ipcMain.on("nova:send", async (event, { message, requestId }) => {
       type: "error",
       message: err instanceof ApiError ? err.message : String(err),
     });
+
     sender.send("nova:stream-end", { requestId });
   }
 });

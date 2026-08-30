@@ -27,6 +27,7 @@
 
   let requestCounter = 0;
   let activeRequestId = null;
+  let conversationId = null;
 
   // tool name -> the .tool-line element currently "running" for it, so a
   // matching tool_finished can flip the same line rather than adding a new one.
@@ -250,9 +251,18 @@
   }
 
   function handleEvent(evt) {
-    if (evt.requestId !== activeRequestId) return;
+    if (
+      evt.type !== "conversation_id" &&
+      evt.requestId !== activeRequestId
+    ) {
+      return;
+    }
 
     switch (evt.type) {
+      case "conversation_id":
+        conversationId = evt.id;
+        break;
+
       case "tool_started":
         addToolStarted(evt.name, evt.args, evt.tier, evt.display);
         break;
@@ -266,7 +276,6 @@
         break;
 
       case "error": {
-        // Fallback to converting the entire object to text if message is missing
         const errorText =
           evt.message || evt.text || JSON.stringify(evt);
 
@@ -275,8 +284,6 @@
       }
 
       default:
-        // Unknown/future event types are shown generically rather than silently
-        // dropped.
         if (evt.message || evt.text) {
           addErrorLine(evt.message || evt.text);
         }
@@ -349,6 +356,7 @@
 
   newConvoBtn.addEventListener("click", () => {
     window.nova.newConversation();
+    conversationId = null;
 
     // Always return to chat when starting a new conversation.
     switchView("chat");

@@ -26,6 +26,10 @@ async function checkHealth(baseUrl) {
 // individual lines are reported as synthetic "error" events rather than
 // aborting the whole stream, since one bad line shouldn't hide the rest.
 async function streamChat(baseUrl, message, conversationId, onEvent) {
+    console.log("SENDING CHAT:", {
+    message,
+    conversationId,
+  });
   let res;
   try {
     res = await fetch(`${baseUrl}/chat`, {
