@@ -348,7 +348,7 @@ body {
   text-wrap: pretty;
 }
 
-.bubble.answer {
+/* .bubble.answer {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
@@ -356,7 +356,7 @@ body {
   font-size: 13.5px;
   line-height: 1.55;
   white-space: pre-wrap;
-}
+} */
 
 /* Tool events read like a system log: monospace, tier-colored left rule. */
 .tool-line {
@@ -478,11 +478,18 @@ body {
 
 /* Markdown */
 .bubble.answer {
-  line-height: 1.6;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  max-width: 88%;
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: normal;
 }
 
 .bubble.answer p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
+  white-space: pre-wrap;
 }
 
 .bubble.answer p:last-child {
@@ -495,7 +502,7 @@ body {
 .bubble.answer h4,
 .bubble.answer h5,
 .bubble.answer h6 {
-  margin: 20px 0 10px;
+  margin: 14px 0 8px;
   line-height: 1.3;
 }
 
@@ -513,12 +520,22 @@ body {
 
 .bubble.answer ul,
 .bubble.answer ol {
-  margin: 8px 0 12px;
+  margin: 8px 0 10px;
   padding-left: 24px;
 }
 
 .bubble.answer li {
-  margin: 4px 0;
+  margin: 0;
+  padding: 0;
+}
+
+.bubble.answer li + li {
+  margin-top: 5px;
+}
+
+.bubble.answer li p {
+  margin: 0;
+  padding: 0;
 }
 
 /* Inline code */
@@ -532,7 +549,7 @@ body {
 
 /* Code blocks */
 .bubble.answer pre {
-  margin: 14px 0;
+  margin: 12px 0;
   padding: 14px 16px;
   overflow-x: auto;
   border-radius: 8px;
@@ -549,7 +566,7 @@ body {
 /* Tables */
 .bubble.answer table {
   width: 100%;
-  margin: 14px 0;
+  margin: 12px 0;
   border-collapse: collapse;
   font-size: 0.95em;
 }
@@ -568,7 +585,7 @@ body {
 
 /* Blockquotes */
 .bubble.answer blockquote {
-  margin: 14px 0;
+  margin: 10px 0;
   padding: 8px 16px;
   border-left: 3px solid rgba(127, 127, 127, 0.5);
   background: rgba(127, 127, 127, 0.08);
@@ -580,7 +597,7 @@ body {
 
 /* Horizontal rule */
 .bubble.answer hr {
-  margin: 20px 0;
+  margin: 14px 0;
   border: 0;
   border-top: 1px solid rgba(127, 127, 127, 0.3);
 }
@@ -588,6 +605,7 @@ body {
 /* Links */
 .bubble.answer a {
   text-decoration: underline;
+  color: white;
 }
 
 /* Images */
