@@ -28,6 +28,7 @@
   let requestCounter = 0;
   let activeRequestId = null;
   let conversationId = null;
+  let permissionPending = false;
 
   // tool name -> the .tool-line element currently "running" for it, so a
   // matching tool_finished can flip the same line rather than adding a new one.
@@ -129,7 +130,7 @@
   }
 
   function addAnswerBubble(text) {
-    console.log(text);
+    console.log("\nANSWER BUBBLE:", text);
     clearEmptyState();
 
     const row = document.createElement("div");
@@ -138,7 +139,6 @@
     const bubble = document.createElement("div");
     bubble.className = "bubble answer";
     bubble.innerHTML = marked.parse(text);
-    console.log(text);
 
     row.appendChild(bubble);
     logContent.appendChild(row);
@@ -245,6 +245,85 @@
 
     scrollToBottom();
   }
+  
+  function addPermissionRequest(evt) {
+    permissionPending = true;
+    clearEmptyState();
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble answer";
+
+    const details = document.createElement("ul");
+    details.className = "permission-details";
+
+    evt.details.split("\n").forEach((line) => {
+      const item = document.createElement("li");
+      item.innerHTML = marked.parse(line);
+      details.appendChild(item);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "permission-actions";
+
+    const yesButton = document.createElement("button");
+    yesButton.type = "button";
+    yesButton.textContent = "✓ Approve";
+
+    const noButton = document.createElement("button");
+    noButton.type = "button";
+    noButton.textContent = "✕ Decline";
+
+    actions.appendChild(yesButton);
+    actions.appendChild(noButton);
+
+    bubble.appendChild(details);
+    bubble.appendChild(actions);
+
+    row.appendChild(bubble);
+    logContent.appendChild(row);
+
+    scrollToBottom();
+
+    function finish(approved) {
+      yesButton.disabled = true;
+      noButton.disabled = true;
+      permissionPending = false;
+
+      if (approved) {
+        yesButton.textContent = "✓ Approved";
+        yesButton.classList.add("selected");
+        yesButton.style.setProperty("--permission-color", "#4aa8d8");
+
+        noButton.remove();
+      } else {
+        noButton.textContent = "✕ Declined";
+        noButton.classList.add("selected");
+        noButton.style.setProperty("--permission-color", "#d95353");
+
+        yesButton.remove();
+      }
+
+      console.log("\nPERMISSION: ", approved);
+
+      window.nova.respondToPermission(
+        conversationId,
+        approved
+      ).catch((err) => {
+        addErrorLine(String(err));
+      });
+    }
+
+    yesButton.addEventListener("click", () => {
+      finish(true);
+    });
+
+    noButton.addEventListener("click", () => {
+      finish(false);
+    });
+  }
 
   function evtDisplayForTool(name, args) {
     return args && args.display ? args.display : "";
@@ -273,6 +352,10 @@
 
       case "answer":
         addAnswerBubble(evt.text || "");
+        break;
+
+      case "permission_requested":
+        addPermissionRequest(evt);
         break;
 
       case "error": {
@@ -311,12 +394,43 @@
     input.select();
   });
 
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const text = input.value.trim();
 
-    if (!text || activeRequestId !== null) return;
+    if (!text) return;
+
+    // ---------------------------------------------------------
+    // Permission response
+    // ---------------------------------------------------------
+
+    if (permissionPending) {
+      const answer = text.toLowerCase();
+
+      if (answer !== "y" && answer !== "n") {
+        addErrorLine("Please answer Y or N.");
+        return;
+      }
+
+      input.value = "";
+      resizeInput();
+
+      permissionPending = false;
+
+      await window.nova.respondToPermission(
+        conversationId,
+        answer === "y"
+      );
+
+      return;
+    }
+
+    // ---------------------------------------------------------
+    // Normal chat
+    // ---------------------------------------------------------
+
+    if (activeRequestId !== null) return;
 
     addUserBubble(text);
 

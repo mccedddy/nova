@@ -7,7 +7,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import requests
 
-from agent.loop_events import run_turn_events
+from agent.loop_events import (
+    run_turn_events,
+    resolve_permission,
+)
 from agent.prompts import SYSTEM_PROMPT
 from settings import API_HEALTH_TIMEOUT
 
@@ -20,6 +23,9 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
 
+class PermissionRequest(BaseModel):
+    conversation_id: str
+    approved: bool
 
 def _new_conversation():
     current_date = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
@@ -51,11 +57,32 @@ def chat_endpoint(req: ChatRequest):
 
     def event_stream():
         yield json.dumps({"type": "conversation_id", "id": conv_id}) + "\n"
-        for event in run_turn_events(req.message, messages):
+        for event in run_turn_events(
+            req.message,
+            messages,
+            conv_id,
+        ):
             yield json.dumps(event) + "\n"
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
+@app.post("/permission")
+def permission_endpoint(req: PermissionRequest):
+    resolved = resolve_permission(
+        req.conversation_id,
+        req.approved,
+    )
+
+    if not resolved:
+        return {
+            "ok": False,
+            "error": "No pending permission request.",
+        }
+
+    return {
+        "ok": True,
+        "approved": req.approved,
+    }
 
 if __name__ == "__main__":
     import uvicorn

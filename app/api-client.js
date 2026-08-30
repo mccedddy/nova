@@ -26,10 +26,10 @@ async function checkHealth(baseUrl) {
 // individual lines are reported as synthetic "error" events rather than
 // aborting the whole stream, since one bad line shouldn't hide the rest.
 async function streamChat(baseUrl, message, conversationId, onEvent) {
-    console.log("SENDING CHAT:", {
-    message,
-    conversationId,
-  });
+  //   console.log("SENDING CHAT:", {
+  //   message,
+  //   conversationId,
+  // });
   let res;
   try {
     res = await fetch(`${baseUrl}/chat`, {
@@ -73,6 +73,35 @@ async function streamChat(baseUrl, message, conversationId, onEvent) {
   }
 }
 
+async function respondToPermission(baseUrl, conversationId, approved) {
+  let res;
+
+  try {
+    res = await fetch(`${baseUrl}/permission`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        approved,
+      }),
+    });
+  } catch (err) {
+    throw new ApiError(
+      `Can't reach the NOVA API at ${baseUrl}: ${err.message}`
+    );
+  }
+
+  if (!res.ok) {
+    throw new ApiError(
+      `NOVA API returned HTTP ${res.status}`
+    );
+  }
+
+  return res.json();
+}
+
 function emitLine(line, onEvent) {
   try {
     const event = JSON.parse(line);
@@ -82,4 +111,9 @@ function emitLine(line, onEvent) {
   }
 }
 
-module.exports = { checkHealth, streamChat, ApiError };
+module.exports = {
+  checkHealth,
+  streamChat,
+  respondToPermission,
+  ApiError,
+};

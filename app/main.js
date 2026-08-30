@@ -2,7 +2,12 @@ const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeI
 const path = require("path");
 
 const { loadSettings, saveSettings } = require("./settings");
-const { checkHealth, streamChat, ApiError } = require("./api-client");
+const {
+  checkHealth,
+  streamChat,
+  respondToPermission,
+  ApiError,
+} = require("./api-client");
 
 const { spawn } = require("node-pty");
 
@@ -195,10 +200,6 @@ function startTerminal(id) {
     `if (Test-Path -LiteralPath '${venvPath}') { . '${venvPath}' }`,
   ].join("; ");
 
-  console.log(`[Terminal ${terminalId}] Starting`);
-  console.log(`[Terminal ${terminalId}] CWD: ${config.cwd}`);
-  console.log(`[Terminal ${terminalId}] Venv: ${venvPath}`);
-
   const ptyProcess = spawn(
     "powershell.exe",
     [
@@ -235,10 +236,6 @@ function startTerminal(id) {
   });
 
   ptyProcess.onExit(({ exitCode, signal }) => {
-    console.log(
-      `[Terminal ${terminalId}] exited: code=${exitCode}, signal=${signal}`
-    );
-
     terminals.delete(terminalId);
 
     if (!mainWindow || mainWindow.isDestroyed()) {
@@ -317,8 +314,6 @@ function killAllTerminals() {
     } catch {
       // Ignore cleanup errors.
     }
-
-    console.log(`[Terminal ${id}] killed`);
   }
 
   terminals.clear();
@@ -345,6 +340,27 @@ ipcMain.handle("nova:health", async () => {
   }
 });
 
+ipcMain.handle(
+  "nova:permission",
+  async (_event, { conversationId, approved }) => {
+    try {
+      return await respondToPermission(
+        settings.apiBaseUrl,
+        conversationId,
+        approved
+      );
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          err instanceof ApiError
+            ? err.message
+            : String(err),
+      };
+    }
+  }
+);
+
 ipcMain.on("nova:send", async (event, { message, requestId }) => {
   const sender = event.sender;
 
@@ -358,7 +374,6 @@ ipcMain.on("nova:send", async (event, { message, requestId }) => {
 
         if (nova_event.type === "conversation_id" && nova_event.id) {
           currentConversationId = nova_event.id;
-          console.log("SAVED CONVERSATION ID:", currentConversationId);
         }
 
         sender.send("nova:event", {

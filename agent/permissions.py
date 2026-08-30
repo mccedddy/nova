@@ -98,16 +98,23 @@ def confirmation_details(tool_name, arguments, tier):
     else:
         target = None
     impact = (
-        f"This may change system state at {target}."
+        f"This may change system state at `{target}`."
         if target
         else "This may change system state; review the operation and its arguments before approving."
     )
 
+    print(
+        f"**Action proposed**: execute `{tool_name}`.\n"
+        f"**Actual operation**: {operation}\n"
+        f"**Concrete impact**: {impact}\n"
+        f"**Risk tier**: `{tier.value}`"
+    )
+
     return (
-        f"Action proposed: execute {tool_name}.\n"
-        f"Actual operation: {operation}\n"
-        f"Concrete impact: {impact}\n"
-        f"Risk tier: {tier.value}"
+        f"**Action proposed**: execute `{tool_name}`.\n"
+        f"**Actual operation**: `{operation}`\n"
+        f"**Concrete impact**: {impact}\n"
+        f"**Risk tier**: `{tier.value}`"
     )
 
 
@@ -117,13 +124,26 @@ def request_confirmation(details):
     return answer in {"y", "yes"}
 
 
-def execute_tool(tool_name, arguments, registry, confirmation_callback=None):
+def execute_tool(
+    tool_name,
+    arguments,
+    registry,
+    confirmation_callback=None,
+    already_confirmed=False,
+):
     tier = classify_operation(tool_name, arguments)
-    if tier is not RiskTier.READ:
+
+    if tier is not RiskTier.READ and not already_confirmed:
         details = confirmation_details(tool_name, arguments, tier)
+
         if confirmation_callback is None:
-            raise PermissionDenied(f"confirmation required before execution:\n{details}")
+            raise PermissionDenied(
+                f"confirmation required before execution:\n{details}"
+            )
+
         if not confirmation_callback(details):
-            raise PermissionDenied(f"user declined this action:\n{details}")
+            raise PermissionDenied(
+                f"user declined this action:\n{details}"
+            )
 
     return registry[tool_name](**arguments)

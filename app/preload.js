@@ -45,6 +45,16 @@ contextBridge.exposeInMainWorld("nova", {
     return ipcRenderer.invoke("nova:health");
   },
 
+  respondToPermission(conversationId, approved) {
+    return ipcRenderer.invoke(
+      "nova:permission",
+      {
+        conversationId,
+        approved,
+      }
+    );
+  },
+
   getSettings() {
     return ipcRenderer.invoke("nova:get-settings");
   },

@@ -614,3 +614,68 @@ body {
   height: auto;
   border-radius: 8px;
 }
+
+/* Permission buttons */
+
+.bubble.answer .permission-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bubble.answer .permission-actions button {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* Approve */
+
+.bubble.answer .permission-actions button:first-child {
+  background: #307191;
+  border-color: #307191;
+  color: white;
+}
+
+.bubble.answer .permission-actions button:first-child:hover:not(:disabled) {
+  background: #307191;
+  border-color: #307191;
+}
+
+/* Decline */
+
+.bubble.answer .permission-actions button:last-child {
+  background: #873535;
+  border-color: #873535;
+  color: white;
+}
+
+.bubble.answer .permission-actions button:last-child:hover:not(:disabled) {
+  background: #873535;
+  border-color: #873535;
+}
+
+/* Selected state */
+
+.bubble.answer .permission-actions button.selected {
+  background: transparent;
+  color: var(--permission-color);
+  border-color: var(--permission-color);
+  opacity: 1;
+  cursor: default;
+}
+
+/* Disabled buttons */
+
+.bubble.answer .permission-actions button:disabled {
+  cursor: default;
+}
