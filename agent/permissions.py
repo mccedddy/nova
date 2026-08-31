@@ -103,13 +103,6 @@ def confirmation_details(tool_name, arguments, tier):
         else "This may change system state; review the operation and its arguments before approving."
     )
 
-    print(
-        f"**Action proposed**: execute `{tool_name}`.\n"
-        f"**Actual operation**: {operation}\n"
-        f"**Concrete impact**: {impact}\n"
-        f"**Risk tier**: `{tier.value}`"
-    )
-
     return (
         f"**Action proposed**: execute `{tool_name}`.\n"
         f"**Actual operation**: `{operation}`\n"

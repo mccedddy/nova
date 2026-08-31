@@ -370,8 +370,6 @@ ipcMain.on("nova:send", async (event, { message, requestId }) => {
       message,
       currentConversationId,
       (nova_event) => {
-        console.log("NOVA EVENT:", nova_event);
-
         if (nova_event.type === "conversation_id" && nova_event.id) {
           currentConversationId = nova_event.id;
         }

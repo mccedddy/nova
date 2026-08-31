@@ -130,7 +130,6 @@
   }
 
   function addAnswerBubble(text) {
-    console.log("\nANSWER BUBBLE:", text);
     clearEmptyState();
 
     const row = document.createElement("div");
@@ -305,8 +304,6 @@
 
         yesButton.remove();
       }
-
-      console.log("\nPERMISSION: ", approved);
 
       window.nova.respondToPermission(
         conversationId,
