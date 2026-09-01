@@ -117,26 +117,6 @@ def request_confirmation(details):
     return answer in {"y", "yes"}
 
 
-def execute_tool(
-    tool_name,
-    arguments,
-    registry,
-    confirmation_callback=None,
-    already_confirmed=False,
-):
-    tier = classify_operation(tool_name, arguments)
-
-    if tier is not RiskTier.READ and not already_confirmed:
-        details = confirmation_details(tool_name, arguments, tier)
-
-        if confirmation_callback is None:
-            raise PermissionDenied(
-                f"confirmation required before execution:\n{details}"
-            )
-
-        if not confirmation_callback(details):
-            raise PermissionDenied(
-                f"user declined this action:\n{details}"
-            )
-
+def execute_tool(tool_name, arguments, registry):
+    # Execute a tool - permissions must be checked before calling
     return registry[tool_name](**arguments)

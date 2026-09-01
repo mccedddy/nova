@@ -4,7 +4,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import api.server as server
-import agent.loop_events as events_module
+import agent.loop as loop_module
 import agent.permissions as permissions_module
 
 
@@ -31,14 +31,14 @@ def test_event_loop_yields_tool_lifecycle_and_answer():
     def fake_chat(messages, tools=None):
         return responses.pop(0)
 
-    with patch.object(events_module, "chat", fake_chat), patch.dict(
-        events_module.TOOL_REGISTRY, {"fake_tool": lambda: "value"}, clear=False
+    with patch.object(loop_module, "chat", fake_chat), patch.dict(
+        loop_module.TOOL_REGISTRY, {"fake_tool": lambda: "value"}, clear=False
     ), patch.object(
         permissions_module,
         "READ_ONLY_TOOLS",
         permissions_module.READ_ONLY_TOOLS | {"fake_tool"},
     ), patch.object(
-        events_module, "TOOL_SCHEMAS", [
+        loop_module, "TOOL_SCHEMAS", [
             {
                 "type": "function",
                 "function": {
@@ -48,7 +48,7 @@ def test_event_loop_yields_tool_lifecycle_and_answer():
             }
         ],
     ):
-        result = list(events_module.run_turn_events("do it", []))
+        result = list(loop_module.run_turn_events("do it", [], "test-conv-id"))
 
     assert [event["type"] for event in result] == [
         "tool_started",
@@ -73,14 +73,14 @@ def test_event_loop_summarizes_after_tool_limit():
             },
         }
 
-    with patch.object(events_module, "chat", fake_chat), patch.dict(
-        events_module.TOOL_REGISTRY, {"fake_tool": lambda: "value"}, clear=False
+    with patch.object(loop_module, "chat", fake_chat), patch.dict(
+        loop_module.TOOL_REGISTRY, {"fake_tool": lambda: "value"}, clear=False
     ), patch.object(
         permissions_module,
         "READ_ONLY_TOOLS",
         permissions_module.READ_ONLY_TOOLS | {"fake_tool"},
     ), patch.object(
-        events_module, "TOOL_SCHEMAS", [
+        loop_module, "TOOL_SCHEMAS", [
             {
                 "type": "function",
                 "function": {
@@ -90,13 +90,13 @@ def test_event_loop_summarizes_after_tool_limit():
             }
         ],
     ):
-        result = list(events_module.run_turn_events("keep going", []))
+        result = list(loop_module.run_turn_events("keep going", [], "test-conv-id"))
 
     assert result[-1] == {"type": "answer", "text": "Summary from gathered results."}
 
 
 def test_chat_returns_ndjson_and_generated_conversation_id():
-    def fake_events(message, messages):
+    def fake_events(message, messages, conversation_id):
         assert message == "hello"
         assert messages[0]["role"] == "system"
         messages.append({"role": "user", "content": message})
@@ -113,7 +113,7 @@ def test_chat_returns_ndjson_and_generated_conversation_id():
 
 
 def test_conversations_are_isolated_and_reused_by_id():
-    def fake_events(message, messages):
+    def fake_events(message, messages, conversation_id):
         messages.append({"role": "user", "content": message})
         messages.append({"role": "assistant", "content": message})
         yield {"type": "answer", "text": message}

@@ -22,16 +22,12 @@ Built with Electron as a Windows desktop client and an optional local Python API
 ```
 📁nova
  ├── 📁agent
+ │    ├── 📄annotations.py
  │    ├── 📄client.py
- │    ├── 📄loop_events.py
  │    ├── 📄loop.py
  │    ├── 📄permissions.py
- │    ├── 📄progress.py
  │    ├── 📄prompts.py
- │    ├── 📄recovery.py
- │    ├── 📄tool_registry.py
- │    ├── 📄validation.py
- │    └── 📄verification.py
+ │    └── 📄tool_registry.py
  ├── 📁api
  │    └── 📄server.py
  ├── 📁app
@@ -98,104 +94,84 @@ Built with Electron as a Windows desktop client and an optional local Python API
     - get_thinking(response_json)
         - Extracts the optional thinking field (if Ollama is configured to emit it) which can show the model's reasoning steps before generating the final output.
 
-## 📄loop_events.py
-- agent/loop_events.py
-- Manages the main agent event loop, handles tool execution, permission requests, error recovery, and conversation state.
-    - resolve_permission(conversation_id, approved)
-        - Checks if a pending permission request exists for the given conversation ID, sets approval status, signals completion via threading.Event, returns True if handled.
-
-    - run_turn_events(user_input, messages, conversation_id)
-        - Main generator function: appends user message, runs iterations of chat→tool_calls→execution loop, yields events for each tool start/finish/error/answer, handles permission waits, retries on failure, and finally summarizes if needed.
-
 ## 📄loop.py
 - agent/loop.py
-- Manages the conversation flow between user input and tool execution, handles permission requests, retries failed operations, and summarizes gathered information when limits are reached.
+- Unified orchestration of conversation flow between user input and tool execution. Handles tool validation, execution, permissions, error recovery, and progress formatting for both terminal CLI and API modes.
+    - run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callback=None)
+        - Core event generator shared between terminal and API modes. Yields structured events (tool_started, tool_finished, permission_requested, answer, error) for each turn. Orchestrates chat invocations, tool validation, execution, permission handling, error recovery, and summarization.
+
     - run_turn(user_input, messages, show_debug_tools=False, show_full_output=False)
-        - It processes a single turn of conversation by: Appending user input to the conversation history, Repeatedly calling the LLM with available tools up to MAX_ITERATIONS times, Extracting and executing tool calls from responses, Handling permission requests, errors, and retries for each tool, Summarizing gathered results when tool limits are reached, Returning the final text response to send back to the user
+        - Terminal interface: consumes core events, prints progress to console, returns final text answer. Used by main.py for CLI REPL interaction.
+
+    - run_turn_events(user_input, messages, conversation_id)
+        - API interface: yields all events from core for WebSocket streaming to client. Uses async event-based permission flow via resolve_permission(). Used by api/server.py to stream conversation to Electron app.
+
+    - resolve_permission(conversation_id, approved)
+        - Resolves a pending permission request (called from /permission API endpoint). Sets approval status and signals the waiting coroutine to proceed with tool execution.
+    
+    - validate_tool_call(name, args, registry, schemas)
+        - Validates tool call by checking registry existence, finding schema, verifying required arguments, and coercing scalar types. Returns (success, validated_args or error_message).
+
+    - format_tool_progress(tool_number, name, arguments)
+        - Creates human-readable progress message by prepending tool number to description. Looks up predefined messages in TOOL_PROGRESS_MESSAGES dictionary.
 
 ## 📄permissions.py
 - agent/permissions.py
-- C:\DEV\nova\agent\permissions.py defines permission checks and risk classification for N.O.V.A.'s tool execution system. It categorizes commands into READ/MODIFY/DESTRUCTIVE tiers and handles user confirmation for non-read operations before allowing execution.
+- Risk classification and confirmation logic for N.O.V.A.'s tool execution system. Categorizes commands into READ/MODIFY/DESTRUCTIVE tiers. This module handles classification and user interaction only.
     - classify_command(command)
-        - Classifies a PowerShell command text by scanning it against destructive, modify, or read patterns to assign a risk tier (READ/MODIFY/DESTRUCTIVE). Returns the lowest risk classification found in the command.
+        - Classifies a PowerShell command text by scanning against destructive, modify, or read patterns to assign a risk tier (READ/MODIFY/DESTRUCTIVE).
 
     - classify_operation(tool_name, arguments)
-        - Classifies a tool call's risk level without trusting model-supplied labels. If the tool is execute_powershell, it analyzes the command; if the tool is in READ_ONLY_TOOLS list, returns READ; otherwise defaults to DESTRUCTIVE for safety.
+        - Classifies a tool call's risk level without trusting model-supplied labels. If execute_powershell, analyzes the command; if in READ_ONLY_TOOLS, returns READ; otherwise defaults to DESTRUCTIVE for safety.
 
     - confirmation_details(tool_name, arguments, tier)
-        - Builds a detailed permission request message showing the proposed action, actual operation being performed, concrete impact on system state, and assigned risk tier value.
+        - Builds a detailed permission request message showing proposed action, actual operation, concrete impact, and risk tier.
 
     - request_confirmation(details)
-        - Interactive function that prints permission details and waits for user input (y/N). Returns True if user approves (yes/y), False otherwise. Uses built-in input() so it blocks until the user responds.
+        - Interactive function that prints permission details and waits for user input (y/N). Returns True if approved, False otherwise.
 
-    - execute_tool(tool_name, arguments, registry, confirmation_callback=None, already_confirmed=False)
-        - Executes a tool with permission handling. Classifies the operation, requires user confirmation via callback for MODIFY/DESTRUCTIVE actions unless already confirmed, raises PermissionDenied if declined or callback missing, then calls the actual tool from registry.
+    - execute_tool(tool_name, arguments, registry)
+        - Pure executor: calls the tool from registry with arguments. Permission verification happens in loop.py's PermissionManager class.
 
-## 📄progress.py
-- agent/progress.py
-- progress logging utility that creates human-readable progress messages for NOVA agent tool calls
-    - format_tool_description(name, arguments)
-        - Formats a progress message string for a given tool call name and its arguments; looks up predefined messages in TOOL_PROGRESS_MESSAGES dictionary or returns "Working" as default
+## 📄annotations.py
+- agent/annotations.py
+- Unified result annotation system. Handles failure recovery guidance and state-change verification for tool execution results.
+    - is_execution_failure(tool_name, result)
+        - Returns True if execute_powershell failed (non-zero return code or timeout).
 
-    - format_tool_progress(tool_number, name, arguments)
-        - Creates formatted progress message by prepending tool number to the description generated by format_tool_description
+    - needs_verification(tool_name, arguments)
+        - Returns True if tool call is riskier than READ tier (state-changing operations).
+
+    - annotate_result(result, annotation_type, attempt_count=None)
+        - Unified annotation function: adds recovery notes for failures or verification reminders for state-changing operations to result object.
 
 ## 📄prompts.py
 - agent/prompts.py
 - Module-level docstring and constant string defining the complete personality, communication style, tool usage rules, response length guidelines, authority/scope rules, system/tool rules (17 detailed rule sets), formatting instructions, search-result interpretation guidelines, fetch sources for detailed info, location handling, command failure recovery steps, verify-before-success protocol, follow user's scope directive, natural conversation behavior, and don't over-explain instructions for how the N.O.V.A. agent should behave and interact with users.
 
-## 📄recovery.py
-- agent/recovery.py
-- handles failure recovery logic for execute_powershell commands, annotating failed results with guidance to avoid retrying identical commands or to seek alternative approaches.
-    - is_execution_failure(tool_name, result)
-        - Returns True if a tool call (specifically execute_powershell) failed at the command level by checking timed out status and return code != 0.
-
-    - annotate_command_failure(result, attempt_count)
-        - Adds a _recovery_note field to failed execute_powershell results: warns about retry limits after MAX_COMMAND_RETRIES or provides error analysis guidance before re-trying.
-
 ## 📄tool_registry.py
 - agent/tool_registry.py
 - collects all native NOVA tools from various modules into a single TOOL_REGISTRY dictionary, mapping each tool's string name to its actual function reference for the agent to call them.
 
-## 📄validation.py
-- agent/validation.py
-- validates tool call arguments before they reach the model: checks if the tool exists, verifies required arguments are present, and coerces types when possible. Returns a success flag plus either validated args or an error message for the model to handle.
-    - validate_tool_call(name, args, registry, schemas)
-        - Validates a tool call by checking existence in registry, finding its schema, ensuring all required arguments are provided, and coercing scalar argument types when conversion is safe. Returns (False, error_message) on failure or (True, coerced_args) on success.
-
-## 📄verification.py
-- agent/verification.py
-- enforces state-change verification rules by detecting operations that modify system state and requiring read-only follow-up checks before reporting success to the user. Prevents false success reports when actions fail silently or don't produce expected results.
-    - needs_verification(tool_name, arguments)
-        - Returns True if the tool call is riskier than READ tier (using classify_operation). Used to determine whether verification logic should apply.
-    
-    - annotate_verification_reminder(result)
-        - Adds a _verification_note field to successful state-changing results, instructing the model to perform a follow-up read-only check before confirming success to the user. Handles dict or non-dict results safely.
-
 ## api/
 ## 📄server.py
 - api/server.py
-- FastAPI server for N.O.V.A. AI agent (localhost:8000). It exposes three public endpoints using FastAPI: /health - health check /chat - chat streaming /permission - permission requests. The server uses a CONVERSATIONS dict to maintain per-session message history and date-aware system prompts.
+- FastAPI server for N.O.V.A. AI agent (localhost:8000). Exposes /health, /chat (streaming), and /permission endpoints. Maintains per-session message history and date-aware system prompts in CONVERSATIONS dict.
     - health()
-        - returns {"api": "ok", "ollama_reachable": bool}
-        - Checks if Ollama service at localhost:11434 is reachable with a simple HTTP GET
-        - Returns True if Ollama responds within API_HEALTH_TIMEOUT, False if connection fails
+        - Returns {"api": "ok", "ollama_reachable": bool}
+        - Checks if Ollama service at localhost:11434 is reachable with HTTP GET
+        - Returns True if Ollama responds within API_HEALTH_TIMEOUT
 
     - chat_endpoint(req: ChatRequest)
-        - req: ChatRequest(BaseModel) containing:
-            - message (str) - the user's input prompt
-            - conversation_id (str | None) - optional ID to persist conversation state
+        - Accepts: message (str), conversation_id (str | None)
         - If conversation_id doesn't exist, initializes new session with date-timestamped system prompt
-        - Runs turn_events generator to stream AI responses as JSON lines (application/x-ndjson)
-        - Each event yields conversation_id, then streamed message events from run_turn_events
+        - Runs run_turn_events() generator to stream AI responses as JSON lines (application/x-ndjson)
+        - Yields conversation_id, then message events including tool lifecycle and answer
 
     - permission_endpoint(req: PermissionRequest)
-        - req: PermissionRequest(BaseModel) containing:
-            - conversation_id (str) - which conversation's permission to modify
-            - approved (bool) - whether to approve or deny the pending request
-        - Calls resolve_permission() to handle approval/denial logic
-        - Returns {"ok": True, "approved": bool} on success
-        - Returns {"ok": False, "error": "..."} if no pending permission exists
+        - Accepts: conversation_id (str), approved (bool)
+        - Calls resolve_permission() to handle approval/denial of pending permission request
+        - Returns {"ok": True, "approved": bool} or {"ok": False, "error": "..."}
 
 ## app/
 ## 📄marked.umd.js

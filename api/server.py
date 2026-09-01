@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import requests
 
-from agent.loop_events import (
+from agent.loop import (
     run_turn_events,
     resolve_permission,
 )

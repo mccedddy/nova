@@ -1,4 +1,4 @@
-from agent.validation import validate_tool_call
+from agent.loop import validate_tool_call
 
 REGISTRY = {"add": lambda a, b: a + b}
 
