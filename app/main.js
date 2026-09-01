@@ -6,6 +6,8 @@ const {
   checkHealth,
   streamChat,
   respondToPermission,
+  getAgentSettings,
+  saveAgentSettings,
   ApiError,
 } = require("./api-client");
 
@@ -413,4 +415,23 @@ ipcMain.on("nova:terminal-resize", (_event, { id, cols, rows }) => {
 
 ipcMain.on("nova:terminal-kill", (_event, id) => {
   killTerminal(id);
+});
+
+// ---- IPC: settings ---------------------------------------------------------
+ipcMain.handle("nova:get-agent-settings", async () => {
+  try {
+    const result = await getAgentSettings(settings.apiBaseUrl);
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("nova:save-agent-settings", async (_event, values) => {
+  try {
+    const result = await saveAgentSettings(settings.apiBaseUrl, values);
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });

@@ -349,12 +349,35 @@
 
           <div class="settings-body">
 
-            <div class="settings-placeholder">
-              <p>Settings</p>
+            <div class="settings-sections" id="settings-sections">
 
-              <p class="empty-sub">
-                NOVA settings will appear here.
-              </p>
+              <section class="settings-section" id="app-settings-section">
+                <h3>App</h3>
+                <p class="settings-section-sub">Electron client settings. Applied immediately.</p>
+                <div class="settings-fields" id="app-settings-fields">
+                  <p class="settings-loading">Loading…</p>
+                </div>
+                <div class="settings-actions">
+                  <button type="button" id="app-settings-save" class="settings-save-btn">Save</button>
+                  <span class="settings-status" id="app-settings-status"></span>
+                </div>
+              </section>
+
+              <section class="settings-section" id="agent-settings-section">
+                <h3>Agent</h3>
+                <p class="settings-section-sub">
+                  NOVA's model and tool settings. Saved to settings.json but require
+                  restarting the API server to take effect.
+                </p>
+                <div class="settings-fields" id="agent-settings-fields">
+                  <p class="settings-loading">Loading…</p>
+                </div>
+                <div class="settings-actions">
+                  <button type="button" id="agent-settings-save" class="settings-save-btn">Save</button>
+                  <span class="settings-status" id="agent-settings-status"></span>
+                </div>
+              </section>
+
             </div>
 
           </div>

@@ -55,13 +55,16 @@ contextBridge.exposeInMainWorld("nova", {
     );
   },
 
-  getSettings() {
+    getSettings() {
     return ipcRenderer.invoke("nova:get-settings");
   },
 
   saveSettings(partial) {
     return ipcRenderer.invoke("nova:save-settings", partial);
   },
+
+  getAgentSettings: () => ipcRenderer.invoke("nova:get-agent-settings"),
+  saveAgentSettings: (values) => ipcRenderer.invoke("nova:save-agent-settings", values),
 
   // ---------------------------------------------------------------------------
   // TERMINALS

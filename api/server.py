@@ -12,7 +12,7 @@ from agent.loop_events import (
     resolve_permission,
 )
 from agent.prompts import SYSTEM_PROMPT
-from settings import API_HEALTH_TIMEOUT
+from settings import API_HEALTH_TIMEOUT, DEFAULTS, INTEGER_RANGES, _load_settings, save_settings
 
 app = FastAPI(title="N.O.V.A. API")
 
@@ -26,6 +26,9 @@ class ChatRequest(BaseModel):
 class PermissionRequest(BaseModel):
     conversation_id: str
     approved: bool
+
+class SettingsUpdate(BaseModel):
+    values: dict
 
 def _new_conversation():
     current_date = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
@@ -82,6 +85,24 @@ def permission_endpoint(req: PermissionRequest):
     return {
         "ok": True,
         "approved": req.approved,
+    }
+
+@app.get("/settings")
+def get_settings():
+    return {
+        "values": _load_settings(),
+        "defaults": DEFAULTS,
+        "ranges": INTEGER_RANGES,
+    }
+
+@app.post("/settings")
+def update_settings(req: SettingsUpdate):
+    merged, rejected = save_settings(req.values)
+    return {
+        "ok": True,
+        "values": merged,
+        "rejected": rejected,
+        "restart_required": True,
     }
 
 if __name__ == "__main__":

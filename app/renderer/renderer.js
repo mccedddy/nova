@@ -90,6 +90,7 @@
 
   settingsButton?.addEventListener("click", () => {
     switchView("settings");
+    loadSettingsView();
   });
 
   // Start on Chat.
@@ -450,6 +451,167 @@
       form.requestSubmit();
     }
   });
+
+// ---------------------------------------------------------------------------
+// Settings view
+// ---------------------------------------------------------------------------
+
+const APP_SETTINGS_FIELDS = [
+  { key: "apiBaseUrl", label: "API base URL", type: "text" },
+  { key: "globalShortcut", label: "Global shortcut", type: "text" },
+  { key: "launchAtLogin", label: "Launch at login", type: "checkbox" },
+  { key: "reduceMotion", label: "Reduce motion", type: "checkbox" },
+];
+
+let settingsLoaded = false;
+let lastAgentRanges = {};
+
+function buildFieldRow(key, label, inputEl) {
+  const row = document.createElement("div");
+  row.className = "settings-field-row";
+
+  const labelEl = document.createElement("label");
+  labelEl.textContent = label;
+  labelEl.setAttribute("for", `field-${key}`);
+
+  inputEl.id = `field-${key}`;
+  inputEl.dataset.key = key;
+
+  row.appendChild(labelEl);
+  row.appendChild(inputEl);
+  return row;
+}
+
+function renderAppSettingsForm(values) {
+  const container = document.getElementById("app-settings-fields");
+  container.innerHTML = "";
+
+  for (const field of APP_SETTINGS_FIELDS) {
+    const input = document.createElement("input");
+    if (field.type === "checkbox") {
+      input.type = "checkbox";
+      input.checked = Boolean(values[field.key]);
+    } else {
+      input.type = "text";
+      input.value = values[field.key] ?? "";
+    }
+    container.appendChild(buildFieldRow(field.key, field.label, input));
+  }
+}
+
+function renderAgentSettingsForm(payload) {
+  const { values, ranges } = payload;
+  const container = document.getElementById("agent-settings-fields");
+  container.innerHTML = "";
+
+  for (const key of Object.keys(values)) {
+    const isNumeric = Object.prototype.hasOwnProperty.call(ranges, key);
+    const input = document.createElement("input");
+
+    if (isNumeric) {
+      input.type = "number";
+      const [min, max] = ranges[key];
+      input.min = min;
+      input.max = max;
+      input.value = values[key];
+    } else {
+      input.type = "text";
+      input.value = values[key];
+    }
+
+    container.appendChild(buildFieldRow(key, key.replace(/_/g, " "), input));
+  }
+}
+
+function collectAppSettingsValues() {
+  const out = {};
+  for (const field of APP_SETTINGS_FIELDS) {
+    const input = document.getElementById(`field-${field.key}`);
+    if (!input) continue;
+    out[field.key] = field.type === "checkbox" ? input.checked : input.value;
+  }
+  return out;
+}
+
+function collectAgentSettingsValues(ranges) {
+  const out = {};
+  const container = document.getElementById("agent-settings-fields");
+  container.querySelectorAll("input[data-key]").forEach((input) => {
+    const key = input.dataset.key;
+    if (Object.prototype.hasOwnProperty.call(ranges, key)) {
+      const num = parseInt(input.value, 10);
+      if (!Number.isNaN(num)) out[key] = num;
+    } else {
+      out[key] = input.value;
+    }
+  });
+  return out;
+}
+
+function setSettingsStatus(elId, text, isError) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("settings-status-error", Boolean(isError));
+}
+
+async function loadSettingsView() {
+  if (settingsLoaded) return;
+  settingsLoaded = true;
+
+  try {
+    const appSettings = await window.nova.getSettings();
+    renderAppSettingsForm(appSettings);
+  } catch (err) {
+    document.getElementById("app-settings-fields").innerHTML =
+      `<p class="settings-error">Couldn't load app settings: ${err.message}</p>`;
+  }
+
+  try {
+    const res = await window.nova.getAgentSettings();
+    if (!res.ok) throw new Error(res.error || "unknown error");
+    lastAgentRanges = res.result.ranges || {};
+    renderAgentSettingsForm(res.result);
+  } catch (err) {
+    document.getElementById("agent-settings-fields").innerHTML =
+      `<p class="settings-error">Couldn't reach NOVA's API to load agent settings: ${err.message}</p>`;
+  }
+}
+
+document.getElementById("app-settings-save")?.addEventListener("click", async () => {
+  const values = collectAppSettingsValues();
+  setSettingsStatus("app-settings-status", "Saving…", false);
+  try {
+    await window.nova.saveSettings(values);
+    setSettingsStatus("app-settings-status", "Saved", false);
+  } catch (err) {
+    setSettingsStatus("app-settings-status", `Failed: ${err.message}`, true);
+  }
+});
+
+document.getElementById("agent-settings-save")?.addEventListener("click", async () => {
+  const values = collectAgentSettingsValues(lastAgentRanges);
+  setSettingsStatus("agent-settings-status", "Saving…", false);
+  try {
+    const res = await window.nova.saveAgentSettings(values);
+    if (!res.ok) throw new Error(res.error || "unknown error");
+    if (res.result.rejected?.length) {
+      setSettingsStatus(
+        "agent-settings-status",
+        `Saved, but rejected: ${res.result.rejected.join(", ")}`,
+        true
+      );
+    } else {
+      setSettingsStatus(
+        "agent-settings-status",
+        "Saved -- restart the API server for changes to take effect.",
+        false
+      );
+    }
+  } catch (err) {
+    setSettingsStatus("agent-settings-status", `Failed: ${err.message}`, true);
+  }
+});
 
   // ---------------------------------------------------------------------------
   // GLOBAL KEYBOARD

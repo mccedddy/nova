@@ -36,7 +36,7 @@ DEFAULTS = {
 
 INTEGER_RANGES = {
 	"ollama_request_timeout": (1, 600),
-	"num_ctx": (1024, 131072),
+	"num_ctx": (1024, 229376),
 	"num_predict": (1, 32768),
 	"max_iterations": (1, 1000),
 	"max_retries": (0, 10),
@@ -59,34 +59,69 @@ INTEGER_RANGES = {
 }
 
 
-def _load_settings():
+def _validate_value(name, value):
+	"""Return (ok, value) for a single setting, applying the same rules as _load_settings."""
+	if name not in DEFAULTS:
+		return False, None
+	if name in INTEGER_RANGES:
+		if isinstance(value, bool) or not isinstance(value, int):
+			return False, None
+		minimum, maximum = INTEGER_RANGES[name]
+		if not minimum <= value <= maximum:
+			return False, None
+	elif name in {"ollama_url", "model"} and not isinstance(value, str):
+		return False, None
+	return True, value
+
+
+def _read_raw():
 	try:
 		with SETTINGS_PATH.open("r", encoding="utf-8") as file:
 			configured = json.load(file)
 	except (OSError, json.JSONDecodeError):
 		configured = {}
+	return configured if isinstance(configured, dict) else {}
 
-	if not isinstance(configured, dict):
-		configured = {}
+
+def _load_settings():
+	configured = _read_raw()
 
 	settings = DEFAULTS.copy()
 	for name, value in configured.items():
-		if name not in DEFAULTS:
-			continue
-		if name in INTEGER_RANGES:
-			if isinstance(value, bool) or not isinstance(value, int):
-				continue
-			minimum, maximum = INTEGER_RANGES[name]
-			if not minimum <= value <= maximum:
-				continue
-		elif name in {"ollama_url", "model"} and not isinstance(value, str):
-			continue
-		settings[name] = value
+		ok, validated = _validate_value(name, value)
+		if ok:
+			settings[name] = validated
 
 	if settings["powershell_max_timeout"] < settings["powershell_timeout"]:
 		settings["powershell_max_timeout"] = settings["powershell_timeout"]
 
 	return settings
+
+
+def save_settings(partial):
+	"""Validate and persist a partial settings update to settings.json.
+
+	Returns (merged_settings, rejected) -- rejected lists any keys that
+	failed validation and were skipped rather than written.
+	"""
+	raw = _read_raw()
+	rejected = []
+
+	for name, value in partial.items():
+		ok, validated = _validate_value(name, value)
+		if ok:
+			raw[name] = validated
+		else:
+			rejected.append(name)
+
+	SETTINGS_PATH.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+
+	settings = DEFAULTS.copy()
+	settings.update(raw)
+	if settings["powershell_max_timeout"] < settings["powershell_timeout"]:
+		settings["powershell_max_timeout"] = settings["powershell_timeout"]
+
+	return settings, rejected
 
 
 _SETTINGS = _load_settings()

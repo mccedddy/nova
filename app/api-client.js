@@ -107,9 +107,27 @@ function emitLine(line, onEvent) {
   }
 }
 
+async function getAgentSettings(baseUrl) {
+  const res = await fetch(`${baseUrl}/settings`);
+  if (!res.ok) throw new ApiError(`GET /settings failed: ${res.status}`);
+  return res.json();
+}
+
+async function saveAgentSettings(baseUrl, values) {
+  const res = await fetch(`${baseUrl}/settings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ values }),
+  });
+  if (!res.ok) throw new ApiError(`POST /settings failed: ${res.status}`);
+  return res.json();
+}
+
 module.exports = {
   checkHealth,
   streamChat,
   respondToPermission,
+  getAgentSettings,
+  saveAgentSettings,
   ApiError,
 };
