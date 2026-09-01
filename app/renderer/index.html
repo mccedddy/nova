@@ -49,10 +49,7 @@
 
     <div class="layout-shell">
 
-      <!-- ========================================================= -->
       <!-- SIDEBAR -->
-      <!-- ========================================================= -->
-
       <aside
         class="sidebar"
         id="sidebar"
@@ -205,17 +202,11 @@
       </aside>
 
 
-      <!-- ========================================================= -->
       <!-- MAIN CONTENT -->
-      <!-- ========================================================= -->
-
       <div class="content" id="content">
 
 
-        <!-- ======================================================= -->
         <!-- CHAT VIEW -->
-        <!-- ======================================================= -->
-
         <div
           id="chat-view"
           class="view chat-view"
@@ -293,10 +284,7 @@
         </div>
 
 
-        <!-- ======================================================= -->
         <!-- TERMINAL 1 VIEW -->
-        <!-- ======================================================= -->
-
         <div
           id="terminal-1-view"
           class="view terminal-view"
@@ -313,10 +301,7 @@
         </div>
 
 
-        <!-- ======================================================= -->
         <!-- TERMINAL 2 VIEW -->
-        <!-- ======================================================= -->
-
         <div
           id="terminal-2-view"
           class="view terminal-view"
@@ -333,10 +318,7 @@
         </div>
 
 
-        <!-- ======================================================= -->
         <!-- SETTINGS VIEW -->
-        <!-- ======================================================= -->
-
         <div
           id="settings-view"
           class="view settings-view"
@@ -351,11 +333,27 @@
 
             <div class="settings-sections" id="settings-sections">
 
+              <!-- App Settings -->
               <section class="settings-section" id="app-settings-section">
                 <h3>App</h3>
                 <p class="settings-section-sub">Electron client settings. Applied immediately.</p>
-                <div class="settings-fields" id="app-settings-fields">
-                  <p class="settings-loading">Loading…</p>
+                <div class="settings-fields">
+                  <div class="settings-field-row">
+                    <label for="field-apiBaseUrl">API base URL</label>
+                    <input type="text" id="field-apiBaseUrl" data-key="apiBaseUrl">
+                  </div>
+                  <div class="settings-field-row">
+                    <label for="field-globalShortcut">Global shortcut</label>
+                    <input type="text" id="field-globalShortcut" data-key="globalShortcut">
+                  </div>
+                  <div class="settings-field-row">
+                    <label for="field-launchAtLogin">Launch at login</label>
+                    <input type="checkbox" id="field-launchAtLogin" data-key="launchAtLogin">
+                  </div>
+                  <div class="settings-field-row">
+                    <label for="field-reduceMotion">Reduce motion</label>
+                    <input type="checkbox" id="field-reduceMotion" data-key="reduceMotion">
+                  </div>
                 </div>
                 <div class="settings-actions">
                   <button type="button" id="app-settings-save" class="settings-save-btn">Save</button>
@@ -363,6 +361,7 @@
                 </div>
               </section>
 
+              <!-- Agent Settings -->
               <section class="settings-section" id="agent-settings-section">
                 <h3>Agent</h3>
                 <p class="settings-section-sub">
@@ -383,6 +382,7 @@
           </div>
 
         </div>
+
 
 
       </div>

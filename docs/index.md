@@ -76,6 +76,7 @@ Built with Electron as a Windows desktop client and an optional local Python API
  └── 📄settings.py
  ```
 
+
 # File Definition
 
 ## agent/
@@ -176,260 +177,304 @@ Built with Electron as a Windows desktop client and an optional local Python API
 ## app/
 ## 📄marked.umd.js
 - app/renderer/vendor/marked.umd.js
-- Module for MarkedJS. Used to parse markdown formatting.
+- Bundled MarkedJS module used to parse and render Markdown in AI responses and permission details.
 
 ## 📄xterm-addon-fit.js
 - app/renderer/vendor/xterm-addon-fit.js
-- Addon for xterm. Used to run terminal in my app.
+- xterm.js FitAddon used to automatically fit terminal dimensions to their container.
 
 ## 📄xterm.css
 - app/renderer/vendor/xterm.css
-- Style for xterm
+- xterm.js stylesheet used by the embedded terminal views.
 
 ## 📄xterm.js
 - app/renderer/vendor/xterm.js
-- Module for xterm. Used to run terminal in my app.
+- Bundled xterm.js library used to render the two embedded terminal instances.
 
 ## 📄index.html
 - app/renderer/index.html
-- It's an HTML-only entry point (no embedded JS functions). Provides static markup for:
-    - Header bar with NOVA title and status hint
-    - Sidebar navigation (Chat, Terminal 1, Terminal 2, Settings buttons)
-    - Three views: chat log, terminal containers, settings placeholder
-    - Chat composer form with text input and send button
-
-    Loads external resources:
-    - style.css, xterm.css for styling
-    - xterm.js addons for terminal rendering
-    - marked.umd.js for markdown parsing
-    - renderer.js (main JS logic)
+- Static HTML entry point for the NOVA renderer. Provides:
+    - Header bar with NOVA title, global shortcut hint, and connection status text
+    - Sidebar navigation for Chat, Terminal 1, Terminal 2, and Settings
+    - New conversation control
+    - Chat log and empty-state content
+    - Chat composer with multiline textarea and send button
+    - Terminal 1 and Terminal 2 containers
+    - App settings UI for API base URL, global shortcut, launch-at-login, and reduced motion
+    - Dynamic Agent settings UI loaded from the NOVA API
 
 ## 📄renderer.js
 - app/renderer/renderer.js
-- Handles chat interface, tabs, terminal instantiation, and API health polling via window.nova IPC
-
+- Main renderer-side UI logic. Manages chat state, API events, permission prompts, settings, terminal instances, view switching, and API/Ollama health status through the window.nova preload bridge.
+    - ConversationState
+        - Tracks current conversation ID, active request ID, running tools, pending permission state, and request counter.
+    
     - switchView(viewName: string)
-        - Switches active sidebar tab; toggles hidden state on views and highlights corresponding button
-
+        - Switches between Chat, Terminal 1, Terminal 2, and Settings views.
+        - Updates sidebar button active state and focuses the appropriate input or terminal.
+    
     - scrollToBottom()
-        - Scrolls log container to bottom after content is appended
-
+        - Scrolls the chat log to the bottom after new content is added.
+    
     - resizeInput()
-        - Auto-resizes textarea input height based on scrollHeight (max 160px)
-
+        - Automatically resizes the chat textarea based on its content, up to 160px.
+    
     - clearEmptyState()
-        - Removes the initial "Nothing asked yet" placeholder div from chat view
-
+        - Removes the current chat empty-state placeholder.
+    
     - addUserBubble(text: string)
-        - Appends user message as a DOM bubble to the chat log; clears previous empty state first
-
+        - Adds a user message to the chat log.
+    
     - addAnswerBubble(text: string)
-        - Appends AI response bubble with markdown parsed via marked.parse() to chat log
-
+        - Adds an AI response to the chat log and renders its Markdown through marked.parse().
+    
     - addErrorLine(message: string)
-        - Appends error text to chat log as red error-line element
-
+        - Adds an error message to the chat log.
+    
     - addToolStarted(name: string, args: object, tier?: string, display?: string)
-        - Creates and appends a running tool-line status indicator to show active tool execution
-
+        - Adds a running tool execution indicator and tracks it in the conversation state.
+    
     - addToolFinished(name: string, result: object, tier?: string)
-        - Updates or adds a completed tool-line indicator; removes from runningTools map
-
+        - Marks a tracked tool execution as completed or adds a completed indicator when no running entry exists.
+    
     - addPermissionRequest(evt: object)
-        - Builds permission request UI with Approve/Decline buttons and event details list
-
-    - evtDisplayForTool(name: string, args: object): string
-        - Returns display name for tools (from args.display or empty string)
-
+        - Displays an Approve/Decline permission prompt using the API event details.
+        - Sends the selected permission decision through window.nova.respondToPermission().
+    
     - handleEvent(evt: object)
-        - Dispatches incoming API events to handlers: conversation_id sets ID, tool_started/finished updates status, answer shows response, permission_requested calls addPermissionRequest, error shows error
-
-    - pollHealth()
-        - Fetches API health status via window.nova.health(); updates connection indicator and status hint text
-
+        - Handles streamed API events including conversation_id, tool_started, tool_finished, answer, permission_requested, and error.
+        - Ignores events belonging to unrelated or previously completed requests.
+    
+    - Chat form submission
+        - Sends normal messages through window.nova.send().
+        - Supports Y/N text responses while a permission request is pending.
+        - Prevents multiple normal requests from being submitted simultaneously.
+        - Supports Enter to send and Shift+Enter for a newline.
+    
+    - Settings management
+        - Loads app settings from the Electron main process.
+        - Loads dynamic Agent settings from the NOVA API.
+        - Generates Agent setting inputs from API-provided values and numeric ranges.
+        - Saves App settings through window.nova.saveSettings().
+        - Saves Agent settings through window.nova.saveAgentSettings() and reports rejected values or the need to restart the API server.
+    
     - createTerminal(id: string, container: HTMLElement)
-        - Initializes xterm.js terminal in given container; sets theme, loads FitAddon, wires stdin to window.nova.terminalInput
-
+        - Creates an xterm.js terminal with FitAddon.
+        - Configures terminal font, cursor, scrollback, and theme.
+        - Automatically fits the terminal when its container is resized.
+        - Sends terminal input through window.nova.terminalInput().
+        - Starts the corresponding PTY through window.nova.terminalStart().
+    
     - focusTerminal(id: string)
-        - Focuses the specified terminal by ID using entry.terminal.focus()
-
-    - newConvoButtonHandler() [anonymous]
-        - Resets chat log, creates empty-state placeholder for fresh conversation
+        - Focuses the specified xterm.js terminal.
+    
+    - Terminal event handlers
+        - Writes nova:terminal-data output into the matching xterm instance.
+        - Displays the PTY exit code when a terminal process exits.
+    
+    - pollHealth()
+        - Polls the NOVA API every 15 seconds through window.nova.health().
+        - Displays separate connection states for API unavailable, Ollama unavailable, and both services connected.
+    
+    - New conversation handler
+        - Clears the current conversation ID and chat log.
+        - Restores the new-conversation empty state.
+    
+    - Escape key handler
+        - Hides the NOVA window through window.nova.hide().
 
 ## 📄style.css
 - app/renderer/style.css
-- Style for index.html
-
-## 📄api-client.js
-- app/api-client.js
-- Thin Electron main process client for NOVA API. Exposes newline-delimited JSON stream parsing for chat events via fetch()
-    - checkHealth(baseUrl: string)
-        - Returns API health object {ok, ollama_reachable}
-        - Throws ApiError if HTTP status is non-ok or fetch fails
-
-    - streamChat(baseUrl: string, message: string, conversationId?: string, onEvent: (event) => void)
-        - POSTs to /chat endpoint, reads response body as lines
-        - Splits buffer by newline, parses JSON events line-by-line, calls onEvent for each
-        - Emits tool_started, tool_finished, answer, error events; rejects on network failure
-        - Trailing partial line at stream end is also emitted before closing
-
-    - respondToPermission(baseUrl: string, conversationId: string, approved: boolean)
-        - POSTs /permission with {conversation_id, approved} payload
-        - Returns permission resolution result JSON object
-        - Throws ApiError on network failure or non-ok status
-
-    - emitLine(line: string, onEvent: (event) => void)
-        - Parses trimmed line as JSON, calls onEvent with resulting event object
-        - Catches parse errors and emits synthetic error event instead of aborting stream
+- Main stylesheet for the NOVA renderer UI, including the window shell, sidebar, chat interface, terminal views, settings interface, status indicators, tool states, and permission controls.
 
 ## 📄main.js
 - app/main.js
-- Electron main process for N.O.V.A. desktop app. Creates tray-resident window, manages terminals via node-pty, handles IPC between renderer and API client
+- Electron main process for NOVA. Manages the application window, tray, global shortcut, settings, API communication, IPC, conversation state, and PTY terminals.
+    - ApiError
+        - Custom error type used for API communication failures.
+    
+    - checkHealth(baseUrl: string)
+        - Calls the API /health endpoint and returns its JSON response.
+        - Throws ApiError when the request fails or returns a non-success status.
+    
+    - streamChat(baseUrl: string, message: string, conversationId: string, onEvent: function)
+        - POSTs messages to /chat.
+        - Streams newline-delimited JSON events from the response body.
+        - Parses each complete event and forwards it to the renderer callback.
+        - Handles trailing stream data and malformed JSON events.
+    
+    - respondToPermission(baseUrl: string, conversationId: string, approved: boolean)
+        - POSTs permission decisions to /permission.
+        - Sends {conversation_id, approved} to the API.
+    
+    - getAgentSettings(baseUrl: string)
+        - Fetches Agent model/tool settings from /settings.
+    
+    - saveAgentSettings(baseUrl: string, values: object)
+        - Saves Agent settings through POST /settings.
+    
     - createWindow()
-        - Creates BrowserWindow with frameless transparent UI at center-top screen (640x460)
-        - Loads renderer/index.html; wires blur/closed events to hide rather than destroy window
-
+        - Creates the frameless, transparent, always-on-top NOVA window.
+        - Uses a default size of 640x460 with minimum dimensions of 420x320.
+        - Loads renderer/index.html.
+        - Hides the window when it loses focus instead of destroying it.
+        - Prevents normal window closing unless the application is quitting.
+    
     - showWindow()
-        - Shows mainWindow and focuses input via "nova:focus-input" IPC
-
+        - Shows the main window and requests renderer input focus.
+    
     - hideWindow()
-        - Hides mainWindow without destroying it
-
+        - Hides the main window without destroying it.
+    
     - toggleWindow()
-        - Toggles visibility: hides if shown, shows if hidden
-
+        - Toggles NOVA visibility.
+    
     - createTray()
-        - Creates tray with icon from assets/tray-icon.png; builds menu for show/quit actions
-
+        - Creates the system tray icon and menu.
+        - Provides Show NOVA and Quit NOVA actions.
+    
     - registerShortcut()
-        - Registers global shortcut via settings.globalShortcut to call toggleWindow(); unregisters any existing shortcuts first
-
-    - app.on("second-instance", handler) [anonymous]
-        - Called when another instance starts; shows current window instead of creating duplicate
-
-    - getVenvPath(): string
-        - Returns venv activation script path: "../venv/Scripts/Activate.ps1" relative to app dir
-
-    - startTerminal(id: string): {ok, alreadyRunning}
-        - Spawns PowerShell via node-pty in C:\DEV\nova with optional venv activation
-        - Returns {ok, alreadyRunning: true} if terminal already exists for that ID
-        - Sends "nova:terminal-data" on output and "nova:terminal-exit" on process exit
-
-    - writeTerminal(id: string, data: string): {ok, error?}
-        - Writes text data to running terminal; returns error if terminal not found/running
-
-    - resizeTerminal(id: string, cols: number, rows: number)
-        - Resizes terminal by cols/rows; silently ignores if invalid dimensions or no terminal
-
-    - killTerminal(id: string)
-        - Kills specified terminal process and removes from terminals map
-
-    - killAllTerminals()
-        - Iterates all tracked terminals, kills each one, then clears the map
-
-    - ipcMain.handle("nova:get-settings"): (event) => settings
-        - IPC responder returning current loaded settings object
-
-    - ipcMain.handle("nova:save-settings"): (_event, partial) => newSettings
-        - Merges partial settings into full set; re-registers global shortcut; returns updated settings
-
-    - ipcMain.handle("nova:health"): async () => {ok, result|error}
-        - Calls checkHealth(settings.apiBaseUrl); returns {ok:true,result} or {ok:false,error}
-
-    - ipcMain.handle("nova:permission"): async (event, {conversationId, approved}) => response
-        - Calls respondToPermission via settings.apiBaseUrl; wraps API errors in IPC-safe response object
-
-    - ipcMain.on("nova:send", handler) [anonymous]
-        - Streams chat to API via streamChat; forwards "nova:event" messages per requestId
-        - Tracks currentConversationId on "conversation_id" event; sends stream-end on completion/error
-
-    - ipcMain.on("nova:new-conversation", () => null)
-        - Clears currentConversationId to allow new session initialization
-
-    - ipcMain.handle("nova:terminal-start"): (_event, id) => {ok, result}
-        - Wraps startTerminal() call for IPC; returns terminal spawn success/fail status
-
-    - ipcMain.on("nova:terminal-input", handler) [anonymous]
-        - Forwards typed terminal input to writeTerminal(id, data); sends output to renderer
-
-    - ipcMain.on("nova:terminal-resize", (_event, {id, cols, rows}) => void)
-        - Calls resizeTerminal(); no return value needed
-
-    - ipcMain.on("nova:terminal-kill", (_event, id) => void)
-        - Invokes killTerminal(id); silences errors if process already terminated
+        - Registers the configured global shortcut and maps it to toggleWindow().
+    
+    - Single-instance handling
+        - Prevents multiple NOVA instances from running simultaneously.
+        - A second launch shows the existing NOVA window instead.
+    
+    - API IPC handlers
+        - nova:get-settings returns loaded app settings.
+        - nova:save-settings saves app settings and re-registers the global shortcut.
+        - nova:health checks API health.
+        - nova:permission sends a permission decision to the API.
+        - nova:get-agent-settings retrieves Agent settings.
+        - nova:save-agent-settings saves Agent settings.
+    
+    - nova:send
+        - Streams chat requests to the NOVA API.
+        - Tracks the current conversation ID from conversation_id events.
+        - Forwards streamed events to the renderer with the request ID.
+        - Sends a stream-end event after completion or failure.
+    
+    - nova:new-conversation
+        - Clears the current conversation ID.
+    
+    - Terminal IPC handlers
+        - Starts, writes to, resizes, and kills PTY terminal instances through terminals.js.
+    
+    - Application lifecycle
+        - Loads settings and initializes the window, tray, and global shortcut when Electron is ready.
+        - Keeps NOVA running in the system tray when the window is hidden.
+        - Unregisters global shortcuts and terminates all PTY terminals during application shutdown.
 
 ## 📄package.json
 - app/package.json
-- List of required packages
+- Defines the Electron application package metadata, scripts, and required Node.js dependencies.
 
 ## 📄preload.js
 - app/preload.js
-- Electron context bridge exposing safe renderer-side API for N.O.V.A. UI. Uses contextBridge.exposeInMainWorld("nova") to expose IPC channel wrappers to renderer sandbox
+- Secure Electron preload bridge exposing the renderer-safe window.nova API through contextBridge.
     - send(message: string, requestId: string)
-        - Sends chat message via ipcRenderer.send("nova:send") with message and request ID for tracking stream  
-
+        - Sends a chat request to the Electron main process.
+    
     - newConversation()
-        - Sends "nova:new-conversation" IPC; clears current conversation on API side
-
-    - hide(): void
-        - Sends "nova:hide" IPC to hide main window
-
-    - onEvent(callback: (payload) => void)
-        - Registers listener for "nova:event"; calls callback with stream events (tool_started, tool_finished, answer, error, conversation_id)
-
-    - onStreamEnd(callback: (payload) => void)
-        - Registers listener for "nova:stream-end"; called when API stream closes successfully
-
-    - onFocusInput(callback: () => void)
-        - Registers listener for "nova:focus-input"; called when user focuses chat input
-
-    - health(): Promise
-        - Invokes "nova:health" IPC; returns {ok, api, ollama_reachable} or {ok, error}
-
-    - respondToPermission(conversationId: string, approved: boolean): Promise
-        - Invokes "nova:permission" with {conversationId, approved}; resolves permission response JSON
-
-    - getSettings(): Promise
-        - Invokes "nova:get-settings"; returns current settings object
-
-    - saveSettings(partial: Object): Promise
-        - Invokes "nova:save-settings" with partial update; merges and returns full settings
-
-    - terminalStart(id: string): Promise<{ok, result}>
-        - Invokes "nova:terminal-start"; starts PTY process in specified terminal ID
-
-    - terminalInput(id: string, data: string): void
-        - Sends typed input to running terminal via "nova:terminal-input" IPC
-
-    - terminalResize(id: string, cols: number, rows: number): void
-        - Sends resize command to terminal via "nova:terminal-resize"; triggers FitAddon fit
-
-    - terminalKill(id: string): void
-        - Sends kill signal to terminal process via "nova:terminal-kill" IPC
-
-    - onTerminalData(callback: (payload) => void)
-        - Registers listener for "nova:terminal-data"; calls callback with {id, data} chunks from terminal output
-
-    - onTerminalExit(callback: (payload) => void)
-        - Registers listener for "nova:terminal-exit"; called when process exits with {id, exitCode, signal}
+        - Resets the current conversation on the main process.
+    
+    - hide()
+        - Hides the NOVA window.
+    
+    - onEvent(callback)
+        - Receives streamed NOVA API events from the main process.
+    
+    - onStreamEnd(callback)
+        - Receives the end-of-stream notification for a chat request.
+    
+    - onFocusInput(callback)
+        - Receives requests to focus the chat input.
+    
+    - health()
+        - Requests API/Ollama health information.
+    
+    - respondToPermission(conversationId: string, approved: boolean)
+        - Sends a permission decision to the API through the main process.
+    
+    - getSettings()
+        - Retrieves Electron app settings.
+    
+    - saveSettings(partial: object)
+        - Saves a partial app settings update.
+    
+    - getAgentSettings()
+        - Retrieves Agent settings from the NOVA API.
+    
+    - saveAgentSettings(values: object)
+        - Saves Agent settings through the NOVA API.
+    
+    - terminalStart(id: string)
+        - Starts the specified PTY terminal.
+    
+    - terminalInput(id: string, data: string)
+        - Sends keyboard input to the specified terminal.
+    
+    - terminalResize(id: string, cols: number, rows: number)
+        - Resizes the specified PTY terminal.
+    
+    - terminalKill(id: string)
+        - Terminates the specified PTY terminal.
+    
+    - onTerminalData(callback)
+        - Receives terminal output from the main process.
+    
+    - onTerminalExit(callback)
+        - Receives terminal process exit events.
 
 ## 📄settings.js
 - app/settings.js
-- Minimal client-side settings manager for N.O.V.A. shell. Provides defaults, loads JSON config from userData/settings.json, saves merged settings; intentionally small for shortcut/API endpoint only
-    - DEFAULTS: object (exported constant)
-        - Default config values: apiBaseUrl="http://127.0.0.1:8000", globalShortcut="Alt+Space", launchAtLogin=false, reduceMotion=false
+- Local Electron settings manager. Stores NOVA client settings as JSON under Electron's userData directory.
+    - DEFAULTS
+        - apiBaseUrl: http://127.0.0.1:8000
+        - globalShortcut: Alt+Space
+        - launchAtLogin: false
+        - reduceMotion: false
+    - settingsPath()
+        - Returns the path to settings.json inside Electron's user data directory.
+    
+    - loadSettings()
+        - Reads and parses settings.json.
+        - Merges stored values with the default settings.
+        - Falls back to defaults if the file is missing or invalid.
+    
+    - saveSettings(settings: object)
+        - Merges incoming settings with the defaults.
+        - Creates the parent directory when necessary.
+        - Writes the resulting configuration as formatted JSON.
 
-    - settingsPath(): string
-        - Returns path to settings.json in app userData directory via app.getPath("userData")
-
-    - loadSettings(): object
-        - Reads and parses settings.json; returns merged { ...DEFAULTS, ...parsed } if file exists
-        - Falls back to DEFAULTS on missing/invalid file without crashing
-
-    - saveSettings(settings: object): object
-        - Merges incoming settings with DEFAULTS (defaults always win for unset keys)
-        - Ensures directory exists with mkdirSync({recursive:true})
-        - Writes JSON with indentation; returns merged config
+## 📄terminals.js
+- app/terminals.js
+- PTY terminal manager used by the two embedded NOVA terminal views.
+    - TERMINAL_CONFIG
+        - Defines two terminal instances, both starting in C:\DEV\nova.
+    
+    - getVenvPath()
+        - Resolves the project's venv\Scripts\Activate.ps1 activation script.
+    
+    - startTerminal(id: string, onData: function, onExit: function)
+        - Creates a PowerShell PTY through node-pty.
+        - Starts in C:\DEV\nova.
+        - Configures UTF-8 output.
+        - Activates the project virtual environment when the activation script exists.
+        - Prevents duplicate PTY instances for the same terminal ID.
+        - Forwards terminal output and process exit events through callbacks.
+    
+    - writeTerminal(id: string, data: string)
+        - Writes input data to the specified running PTY.
+    
+    - resizeTerminal(id: string, cols: number, rows: number)
+        - Resizes the specified PTY when valid dimensions are supplied.
+    
+    - killTerminal(id: string)
+        - Terminates and removes a specific PTY instance.
+    
+    - killAllTerminals()
+        - Terminates all tracked PTY instances and clears the terminal map.
 
 ## tools/
 ## 📄__init__.py

@@ -1,11 +1,3 @@
-// Minimal client-side settings for the Phase 13 desktop shell.
-//
-// This intentionally stays small: just enough to make the shortcut and API
-// endpoint configurable without editing source. Phase 14 replaces this with
-// the full settings.json + settings.py system (model/context/timeout config,
-// Ollama + API process control, restart-required handling, etc). Don't grow
-// this file with Phase 14 concerns -- add a new module instead.
-
 const fs = require("fs");
 const path = require("path");
 const { app } = require("electron");

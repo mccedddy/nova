@@ -1,104 +1,93 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("nova", {
-  // ---------------------------------------------------------------------------
-  // CHAT
-  // ---------------------------------------------------------------------------
-
+  // Send chat message to API
   send(message, requestId) {
     ipcRenderer.send("nova:send", { message, requestId });
   },
 
+  // Start new conversation
   newConversation() {
     ipcRenderer.send("nova:new-conversation");
   },
 
-  // ---------------------------------------------------------------------------
-  // WINDOW
-  // ---------------------------------------------------------------------------
-
+  // Hide main window
   hide() {
-    ipcRenderer.send("nova:hide");
+    return ipcRenderer.send("nova:hide");
   },
 
-  // ---------------------------------------------------------------------------
-  // NOVA EVENTS
-  // ---------------------------------------------------------------------------
-
+  // Listen for API events
   onEvent(callback) {
     ipcRenderer.on("nova:event", (_e, payload) => callback(payload));
   },
 
+  // Listen for stream end
   onStreamEnd(callback) {
     ipcRenderer.on("nova:stream-end", (_e, payload) => callback(payload));
   },
 
+  // Listen for input focus request
   onFocusInput(callback) {
     ipcRenderer.on("nova:focus-input", () => callback());
   },
 
-  // ---------------------------------------------------------------------------
-  // API / SETTINGS
-  // ---------------------------------------------------------------------------
-
+  // Check API and Ollama health
   health() {
     return ipcRenderer.invoke("nova:health");
   },
 
+  // Send permission response to API
   respondToPermission(conversationId, approved) {
-    return ipcRenderer.invoke(
-      "nova:permission",
-      {
-        conversationId,
-        approved,
-      }
-    );
+    return ipcRenderer.invoke("nova:permission", { conversationId, approved });
   },
 
-    getSettings() {
+  // Get app settings
+  getSettings() {
     return ipcRenderer.invoke("nova:get-settings");
   },
 
+  // Save app settings
   saveSettings(partial) {
     return ipcRenderer.invoke("nova:save-settings", partial);
   },
 
-  getAgentSettings: () => ipcRenderer.invoke("nova:get-agent-settings"),
-  saveAgentSettings: (values) => ipcRenderer.invoke("nova:save-agent-settings", values),
+  // Get agent model/tool settings
+  getAgentSettings() {
+    return ipcRenderer.invoke("nova:get-agent-settings");
+  },
 
-  // ---------------------------------------------------------------------------
-  // TERMINALS
-  // ---------------------------------------------------------------------------
+  // Save agent settings
+  saveAgentSettings(values) {
+    return ipcRenderer.invoke("nova:save-agent-settings", values);
+  },
 
+  // Start terminal instance
   terminalStart(id) {
     return ipcRenderer.invoke("nova:terminal-start", id);
   },
 
+  // Send input to terminal
   terminalInput(id, data) {
-    ipcRenderer.send("nova:terminal-input", { id, data });
+    return ipcRenderer.invoke("nova:terminal-input", { id, data });
   },
 
+  // Resize terminal
   terminalResize(id, cols, rows) {
-    ipcRenderer.send("nova:terminal-resize", {
-      id,
-      cols,
-      rows,
-    });
+    return ipcRenderer.invoke("nova:terminal-resize", { id, cols, rows });
   },
 
+  // Kill terminal
   terminalKill(id) {
-    ipcRenderer.send("nova:terminal-kill", id);
+    return ipcRenderer.invoke("nova:terminal-kill", id);
   },
 
+  // Listen for terminal output
   onTerminalData(callback) {
-    ipcRenderer.on("nova:terminal-data", (_e, payload) => {
-      callback(payload);
-    });
+    ipcRenderer.on("nova:terminal-data", (_e, payload) => callback(payload));
   },
 
+  // Listen for terminal exit
   onTerminalExit(callback) {
-    ipcRenderer.on("nova:terminal-exit", (_e, payload) => {
-      callback(payload);
-    });
+    ipcRenderer.on("nova:terminal-exit", (_e, payload) => callback(payload));
   },
 });
