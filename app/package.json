@@ -1,7 +1,7 @@
 {
   "name": "nova-desktop",
   "version": "0.1.0",
-  "description": "Windows desktop client for N.O.V.A. -- consumes the local NOVA API (Phase 7). Phase 13 of the NOVA project plan.",
+  "description": "Windows desktop client for N.O.V.A. -- consumes the local NOVA API.",
   "main": "main.js",
   "private": true,
   "scripts": {
