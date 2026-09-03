@@ -5,8 +5,6 @@ const { app } = require("electron");
 const DEFAULTS = {
   apiBaseUrl: "http://127.0.0.1:8000",
   globalShortcut: "Alt+Space",
-  launchAtLogin: false,
-  reduceMotion: false,
 };
 
 function settingsPath() {

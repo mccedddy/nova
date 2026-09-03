@@ -66,7 +66,3 @@ def extract_tool_calls(response_json):
 
 def get_final_text(response_json):
     return response_json.get("message", {}).get("content", "")
-
-
-def get_thinking(response_json):
-    return response_json.get("message", {}).get("thinking", "")

@@ -145,22 +145,6 @@ def _get_gpu_info_wmi():
     except (json.JSONDecodeError, Exception) as e:
         return [{"error": f"failed to parse GPU info: {e}"}]
 
-
-def _try_nvidia_smi():
-    # NVIDIA systems can provide more accurate VRAM and driver data.
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            timeout=NVIDIA_SMI_TIMEOUT,
-        )
-        if result.returncode != 0:
-            return None
-        return {"driver_version": result.stdout.strip()}
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return None
-
 def _try_nvidia_smi():
     try:
         result = subprocess.run(
