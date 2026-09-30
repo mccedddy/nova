@@ -65,6 +65,16 @@ READ_COMMAND_PATTERN = re.compile(
 class PermissionDenied(Exception):
     """Raised when an operation was not approved for execution."""
 
+def one_line(cmd: str, max_len: int = 600) -> str:
+    # display only, never execute this version
+    s = " ⏎ ".join(line.strip() for line in cmd.splitlines() if line.strip())
+    if len(s) > max_len:
+        s = s[:max_len] + f"… (+{len(s) - max_len} more chars)"
+    # inline code delimiter must be longer than any backtick run inside
+    longest = max((len(m) for m in re.findall(r"`+", s)), default=0)
+    ticks = "`" * (longest + 1)
+    return f"{ticks} {s} {ticks}"
+
 
 def classify_command(command):
     """Classify the actual command text, conservatively on ambiguity."""
@@ -105,8 +115,8 @@ def confirmation_details(tool_name, arguments, tier):
 
     return (
         f"**Action proposed**: execute `{tool_name}`.\n"
-        f"**Actual operation**: `{operation}`\n"
-        f"**Concrete impact**: {impact}\n"
+        f"**Actual operation**: {one_line(operation)}\n"
+        f"**Concrete impact**: {one_line(impact)}\n"
         f"**Risk tier**: `{tier.value}`"
     )
 

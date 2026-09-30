@@ -22,7 +22,7 @@
   const terminal2Container = document.getElementById("terminal-2-container");
 
   // Theme
-  document.documentElement.dataset.theme = "light";
+  document.documentElement.dataset.theme = "";
 
   // Manages conversation state and permissions
   class ConversationState {
