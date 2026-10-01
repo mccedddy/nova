@@ -1,4 +1,6 @@
 from agent.permissions import (
+    MEMORY_TOOLS,
+    READ_ONLY_TOOLS,
     RiskTier,
     classify_command,
     classify_operation,
@@ -61,3 +63,18 @@ def test_operation_classifier_is_conservative_for_unknown_tools():
     details = confirmation_details("unknown_state_changing_tool", {}, RiskTier.DESTRUCTIVE)
     assert "**Action proposed**:" in details  # confirmation_details returns markdown format
     assert "**Concrete impact**:" in details  # markdown formatting
+
+
+def test_memory_tools_auto_approve_without_falling_through_to_destructive():
+    # They write to disk but skip the prompt. Without the AUTO_APPROVE_TOOLS
+    # branch these would land on the DESTRUCTIVE safety default.
+    assert classify_operation("remember", {"key": "a", "value": "b"}) is RiskTier.READ
+    assert classify_operation("forget", {"key": "a"}) is RiskTier.READ
+
+
+def test_memory_tools_are_not_in_read_only_set():
+    # READ_ONLY_TOOLS documents genuinely read-only tools; memory writes are
+    # kept out of it so the set stays honest.
+    assert "remember" not in READ_ONLY_TOOLS
+    assert "forget" not in READ_ONLY_TOOLS
+    assert MEMORY_TOOLS == {"remember", "forget"}

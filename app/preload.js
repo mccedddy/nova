@@ -2,8 +2,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("nova", {
   // Send chat message to API
-  send(message, requestId) {
-    ipcRenderer.send("nova:send", { message, requestId });
+  send(message, requestId, incognito) {
+    ipcRenderer.send("nova:send", { message, requestId, incognito });
   },
 
   // Start new conversation
@@ -59,6 +59,16 @@ contextBridge.exposeInMainWorld("nova", {
   // Save agent settings
   saveAgentSettings(values) {
     return ipcRenderer.invoke("nova:save-agent-settings", values);
+  },
+
+  // List stored memory entries
+  getMemory() {
+    return ipcRenderer.invoke("nova:get-memory");
+  },
+
+  // Delete a single memory entry by key
+  deleteMemory(key) {
+    return ipcRenderer.invoke("nova:delete-memory", key);
   },
 
   // Start terminal instance

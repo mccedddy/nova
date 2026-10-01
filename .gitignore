@@ -13,6 +13,10 @@ __pycache__/
 *.log
 logs/
 
+# Agent memory (durable user facts — personal data, never committed)
+memory.json
+memory.log
+
 # Env / secrets (if you add a search API key later)
 .env
 

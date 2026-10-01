@@ -21,5 +21,9 @@
   "disk_health_timeout": 20,
   "nvidia_smi_timeout": 10,
   "api_health_timeout": 3,
-  "num_ctx": 229376
+  "num_ctx": 229376,
+  "memory_enabled": true,
+  "memory_autocapture_mode": "trigger",
+  "memory_max_entries": 200,
+  "memory_max_value_chars": 500
 }

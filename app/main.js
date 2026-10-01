@@ -30,7 +30,7 @@ async function checkHealth(baseUrl) {
 }
 
 // Stream chat events line-by-line from API
-async function streamChat(baseUrl, message, conversationId, onEvent) {
+async function streamChat(baseUrl, message, conversationId, incognito, onEvent) {
   let res;
   try {
     res = await fetch(`${baseUrl}/chat`, {
@@ -39,6 +39,7 @@ async function streamChat(baseUrl, message, conversationId, onEvent) {
       body: JSON.stringify({
         message,
         conversation_id: conversationId || undefined,
+        incognito: Boolean(incognito),
       }),
     });
   } catch (err) {
@@ -116,6 +117,20 @@ async function saveAgentSettings(baseUrl, values) {
     body: JSON.stringify({ values }),
   });
   if (!res.ok) throw new ApiError(`POST /settings failed: ${res.status}`);
+  return res.json();
+}
+
+// List stored memory entries
+async function getMemory(baseUrl) {
+  const res = await fetch(`${baseUrl}/memory`);
+  if (!res.ok) throw new ApiError(`GET /memory failed: ${res.status}`);
+  return res.json();
+}
+
+// Delete a single memory entry by key
+async function deleteMemory(baseUrl, key) {
+  const res = await fetch(`${baseUrl}/memory/${encodeURIComponent(key)}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError(`DELETE /memory failed: ${res.status}`);
   return res.json();
 }
 
@@ -264,15 +279,21 @@ ipcMain.handle("nova:permission", async (_event, { conversationId, approved }) =
 });
 
 // Stream chat messages and events to renderer
-ipcMain.on("nova:send", async (event, { message, requestId }) => {
+ipcMain.on("nova:send", async (event, { message, requestId, incognito }) => {
   const sender = event.sender;
   try {
-    await streamChat(settings.apiBaseUrl, message, currentConversationId, (nova_event) => {
-      if (nova_event.type === "conversation_id" && nova_event.id) {
-        currentConversationId = nova_event.id;
+    await streamChat(
+      settings.apiBaseUrl,
+      message,
+      currentConversationId,
+      incognito ?? settings.incognito,
+      (nova_event) => {
+        if (nova_event.type === "conversation_id" && nova_event.id) {
+          currentConversationId = nova_event.id;
+        }
+        sender.send("nova:event", { requestId, ...nova_event });
       }
-      sender.send("nova:event", { requestId, ...nova_event });
-    });
+    );
     sender.send("nova:stream-end", { requestId });
   } catch (err) {
     sender.send("nova:event", { requestId, type: "error", message: err.message });
@@ -297,6 +318,24 @@ ipcMain.handle("nova:save-agent-settings", async (_event, values) => {
   try {
     const result = await saveAgentSettings(settings.apiBaseUrl, values);
     return { ok: true, result };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("nova:get-memory", async () => {
+  try {
+    const result = await getMemory(settings.apiBaseUrl);
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("nova:delete-memory", async (_event, key) => {
+  try {
+    const result = await deleteMemory(settings.apiBaseUrl, key);
+    return { ok: result.ok !== false, result };
   } catch (err) {
     return { ok: false, error: err.message };
   }

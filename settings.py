@@ -32,6 +32,22 @@ DEFAULTS = {
 	"disk_health_timeout": 20,
 	"nvidia_smi_timeout": 10,
 	"api_health_timeout": 3,
+	"memory_enabled": True,
+	"memory_autocapture_mode": "trigger",
+	"memory_max_entries": 200,
+	"memory_max_value_chars": 500,
+}
+
+# Boolean settings need an explicit branch in _validate_value; without it they
+# fall through every type check and are persisted unvalidated.
+BOOL_KEYS = {
+	"memory_enabled",
+}
+
+# Enumerated string settings. A value outside the tuple is rejected and the
+# default is used instead, so a typo can't silently change capture behavior.
+STRING_CHOICES = {
+	"memory_autocapture_mode": ("trigger", "always"),
 }
 
 INTEGER_RANGES = {
@@ -56,6 +72,8 @@ INTEGER_RANGES = {
 	"disk_health_timeout": (1, 120),
 	"nvidia_smi_timeout": (1, 120),
 	"api_health_timeout": (1, 120),
+	"memory_max_entries": (1, 1000),
+	"memory_max_value_chars": (20, 5000),
 }
 
 
@@ -63,7 +81,13 @@ def _validate_value(name, value):
 	"""Return (ok, value) for a single setting, applying the same rules as _load_settings."""
 	if name not in DEFAULTS:
 		return False, None
-	if name in INTEGER_RANGES:
+	if name in BOOL_KEYS:
+		if not isinstance(value, bool):
+			return False, None
+	elif name in STRING_CHOICES:
+		if not isinstance(value, str) or value not in STRING_CHOICES[name]:
+			return False, None
+	elif name in INTEGER_RANGES:
 		if isinstance(value, bool) or not isinstance(value, int):
 			return False, None
 		minimum, maximum = INTEGER_RANGES[name]
@@ -149,3 +173,7 @@ SYSTEM_POWERSHELL_TIMEOUT = _SETTINGS["system_powershell_timeout"]
 DISK_HEALTH_TIMEOUT = _SETTINGS["disk_health_timeout"]
 NVIDIA_SMI_TIMEOUT = _SETTINGS["nvidia_smi_timeout"]
 API_HEALTH_TIMEOUT = _SETTINGS["api_health_timeout"]
+MEMORY_ENABLED = _SETTINGS["memory_enabled"]
+MEMORY_AUTOCAPTURE_MODE = _SETTINGS["memory_autocapture_mode"]
+MEMORY_MAX_ENTRIES = _SETTINGS["memory_max_entries"]
+MEMORY_MAX_VALUE_CHARS = _SETTINGS["memory_max_value_chars"]

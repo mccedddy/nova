@@ -293,4 +293,53 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": (
+                "Store a durable fact about the user so it is available in future "
+                "conversations. Use a short snake_case key and overwrite it when the "
+                "user changes the fact. Only for standing facts: name, preferred "
+                "shell or tools, how they like replies written. Never store secrets, "
+                "passwords, tokens, or details scoped to one request. No-op while "
+                "incognito mode is on."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Short snake_case identifier, e.g. 'preferred_shell'",
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The fact itself, kept short and self-contained",
+                    },
+                },
+                "required": ["key", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forget",
+            "description": (
+                "Remove a stored fact by its key when the user asks you to stop "
+                "remembering something, or corrects it and you should re-save it "
+                "under a new key instead. No-op while incognito mode is on."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "The key passed to the earlier remember call",
+                    },
+                },
+                "required": ["key"],
+            },
+        },
+    },
 ]

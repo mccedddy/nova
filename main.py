@@ -1,15 +1,10 @@
-from datetime import datetime
-
 from agent.loop import run_turn
-from agent.prompts import SYSTEM_PROMPT
+from agent.prompts import build_system_prompt
 
 def main(show_debug_tools=False, show_full_output=False):
     print("N.O.V.A. -- type 'exit' or 'quit' to leave.\n")
 
-    current_date = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
-    system_prompt_with_date = f"{SYSTEM_PROMPT}\n\nToday's real date and time is {current_date}. Use this for any date/time-relative reasoning -- do not guess or assume what year or date it is."
-
-    messages = [{"role": "system", "content": system_prompt_with_date}]
+    messages = [{"role": "system", "content": build_system_prompt()}]
 
     while True:
         try:

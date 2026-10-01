@@ -2,6 +2,7 @@ import threading
 
 from agent.client import chat, extract_tool_calls, get_final_text, OllamaUnavailableError
 from agent.permissions import (
+    MEMORY_TOOLS,
     PermissionDenied,
     execute_tool,
     request_confirmation,
@@ -10,9 +11,16 @@ from agent.permissions import (
     confirmation_details,
 )
 from agent.annotations import annotate_result, is_execution_failure, needs_verification
+from agent.memory import start_autocapture
 from agent.tool_registry import TOOL_REGISTRY
 from tools.tool_schemas import TOOL_SCHEMAS
-from settings import MAX_ITERATIONS, MAX_RETRIES, MAX_TERMINAL_CHARS
+from settings import (
+    MAX_ITERATIONS,
+    MAX_RETRIES,
+    MAX_TERMINAL_CHARS,
+    MEMORY_AUTOCAPTURE_MODE,
+    MEMORY_ENABLED,
+)
 
 # Progress message templates for tool calls
 TOOL_PROGRESS_MESSAGES = {
@@ -29,6 +37,8 @@ TOOL_PROGRESS_MESSAGES = {
     "web_search": "Searching the web for information",
     "fetch_page": "Checking information from web",
     "get_approximate_location": "Checking location",
+    "remember": "Noting this for future conversations",
+    "forget": "Forgetting a stored detail",
 }
 
 # Type coercion map for argument validation
@@ -194,12 +204,15 @@ def _summarize_gathered_results(messages):
     return final_text.strip() or None
 
 
-def run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callback=None):
+def run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callback=None, incognito=False):
     # Main orchestration loop: chat, extract tools, validate, get permissions, execute, annotate
     messages.append({"role": "user", "content": user_input})
     failure_counts = {}
     command_failure_counts = {}
     tool_call_counter = 0
+    # Memory writes are refused when the session is incognito or memory is off globally.
+    memory_off = incognito or not MEMORY_ENABLED
+    memory_off_reason = "incognito mode is on" if incognito else "memory is disabled in settings"
     
     for _ in range(MAX_ITERATIONS):
         # Chat with LLM
@@ -228,6 +241,13 @@ def run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callb
                 return
             
             messages.append({"role": "assistant", "content": final_text})
+
+            # Fire-and-forget: the extraction call must not delay the answer.
+            # "trigger" mode is free for non-matching turns; "always" mode pays
+            # one short call per turn and lets the model decide.
+            if not memory_off:
+                start_autocapture(user_input, final_text, MEMORY_AUTOCAPTURE_MODE)
+
             yield {"type": "answer", "text": final_text}
             return
         
@@ -250,7 +270,15 @@ def run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callb
             # Validate tool call
             ok, validated = validate_tool_call(name, args, TOOL_REGISTRY, TOOL_SCHEMAS)
             permission_error = False
-            
+            memory_blocked = False
+
+            # Incognito is enforced here, not in the prompt: no memory write
+            # reaches the registry, and there is nothing to confirm.
+            if ok and memory_off and name in MEMORY_TOOLS:
+                ok = False
+                memory_blocked = True
+                validated = f"'{name}' is not available -- {memory_off_reason}"
+
             if ok:
                 try:
                     # Classify risk tier and handle permissions
@@ -307,6 +335,12 @@ def run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callb
             if not ok:
                 if permission_error:
                     result = f"error: {validated}"
+                elif memory_blocked:
+                    result = (
+                        f"error: {validated} -- nothing was stored or removed. "
+                        "Tell the user you are not remembering anything right now, "
+                        "and do not call this tool again this session."
+                    )
                 else:
                     failure_counts[name] = failure_counts.get(name, 0) + 1
                     if failure_counts[name] > MAX_RETRIES:
@@ -335,9 +369,14 @@ def run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callb
         yield {"type": "error", "text": "I gathered information but couldn't produce a final answer from it."}
 
 
-def run_turn(user_input, messages, show_debug_tools=False, show_full_output=False):
+def run_turn(user_input, messages, show_debug_tools=False, show_full_output=False, incognito=False):
     # Terminal interface: consumes events, prints progress, returns final answer
-    for event in run_turn_core(user_input, messages, sync_confirm_callback=request_confirmation):
+    for event in run_turn_core(
+        user_input,
+        messages,
+        sync_confirm_callback=request_confirmation,
+        incognito=incognito,
+    ):
         if event["type"] == "tool_started":
             print(event["display"])
             if show_debug_tools:
@@ -365,7 +404,12 @@ def run_turn(user_input, messages, show_debug_tools=False, show_full_output=Fals
             return f"⚠ {event['text']}"
 
 
-def run_turn_events(user_input, messages, conversation_id):
+def run_turn_events(user_input, messages, conversation_id, incognito=False):
     # API interface: yields events for WebSocket streaming with async permission flow
-    for event in run_turn_core(user_input, messages, conversation_id=conversation_id):
+    for event in run_turn_core(
+        user_input,
+        messages,
+        conversation_id=conversation_id,
+        incognito=incognito,
+    ):
         yield event

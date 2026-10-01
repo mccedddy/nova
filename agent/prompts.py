@@ -1,5 +1,10 @@
 """System prompt for NOVA AI agent."""
 
+from datetime import datetime
+
+from agent.memory import render_memory_block
+from settings import MEMORY_ENABLED
+
 SYSTEM_PROMPT = """You are N.O.V.A. (Native Operating-system Virtual Assistant), a local AI agent running on the user's Windows system.
 
 You are not just a tool interface. You are the user's personal assistant and should feel like a capable, natural person to talk to rather than a generic corporate AI.
@@ -158,3 +163,26 @@ SYSTEM AND TOOL RULES:
 
     Only expand into deeper explanation when the question requires it or the user asks for more detail.
     """
+
+
+def build_system_prompt(incognito=False):
+    """Compose the live system prompt.
+
+    The real date is always injected here rather than hardcoded, and stored
+    memory is appended only when there is something to say and the session is
+    not incognito. An empty store therefore leaves the prompt untouched.
+    """
+    parts = [SYSTEM_PROMPT]
+
+    if MEMORY_ENABLED and not incognito:
+        memory_block = render_memory_block()
+        if memory_block:
+            parts.append(memory_block)
+
+    current_date = datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
+    parts.append(
+        f"Today's real date and time is {current_date}. Use this for any "
+        "date/time-relative reasoning -- do not guess or assume what year or date it is."
+    )
+
+    return "\n\n".join(parts)

@@ -271,6 +271,13 @@ body {
 
 }
 
+/* Incognito toggle. Uses `on` rather than `active` because switchView()
+   owns `active` for the view buttons. */
+.sidebar-button-toggle.on {
+  color: var(--accent-modify);
+  background: var(--overlay-hover);
+}
+
 .conn-dot {
   display: block;
   width: 9px;
@@ -823,6 +830,77 @@ body {
   gap: 24px;
   padding: 16px;
   overflow-y: auto;
+}
+
+/* Memory */
+
+.memory-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: auto;
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memory-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--overlay-soft);
+  border: 0px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.memory-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.memory-key {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-read);
+}
+
+.memory-value {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.memory-meta {
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.memory-delete {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  color: var(--text-faint);
+  font-size: 11px;
+  background: var(--overlay-button);
+  border: 0px solid var(--overlay-button-border);
+  border-radius: 5px;
+  cursor: pointer;
+  outline: 0px;
+}
+
+.memory-delete:hover {
+  color: var(--error-text);
+  background: var(--overlay-hover);
+}
+
+.memory-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .settings-section h3 {

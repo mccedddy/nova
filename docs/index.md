@@ -8,7 +8,7 @@ File-by-file API reference for the NOVA codebase. For conventions, run commands,
 
 Three layers: the **Python agent core** (`agent/`, `tools/`) runs the ReAct tool-calling loop; the **Python API** (`api/server.py`) exposes it over HTTP as NDJSON events; the **Electron client** (`app/`) is a desktop UI that consumes the API and never runs Python tools directly.
 
-**14 tools** are registered (`tools/tool_schemas.py`): system diagnostics, running processes, network connections, GPU driver info, disk health, registry query, installed apps, file search, folder size, file relevance, web search, page fetch, approximate location, and dynamic PowerShell execution. All are READ-tier auto-execute except `execute_powershell`, whose risk is classified per-command.
+**16 tools** are registered (`tools/tool_schemas.py`): system diagnostics, running processes, network connections, GPU driver info, disk health, registry query, installed apps, file search, folder size, file relevance, web search, page fetch, approximate location, dynamic PowerShell execution, and durable memory (`remember`/`forget`). All are READ-tier auto-execute except `execute_powershell`, whose risk is classified per-command.
 
 **Permissions** (READ / MODIFY / DESTRUCTIVE-SYSTEM-LEVEL) are enforced in Python (`agent/permissions.py`), never by model self-report. MODIFY and DESTRUCTIVE require user confirmation.
 
@@ -24,9 +24,10 @@ nova/
   agent/
     loop.py               # ReAct loop (terminal + API entry points)
     client.py             # Ollama /api/chat wrapper
-    prompts.py            # system prompt
+    prompts.py            # system prompt + build_system_prompt()
     permissions.py        # risk classification + confirmation
     annotations.py        # recovery/verification notes on tool results
+    memory.py             # durable fact store, prompt injection, autocapture
     tool_registry.py      # name -> tool function map
   api/
     server.py             # FastAPI server (127.0.0.1:8000)
@@ -34,6 +35,7 @@ nova/
     __init__.py
     tool_schemas.py       # TOOL_SCHEMAS (JSON function schemas)
     filesystem.py
+    memory.py
     powershell.py
     processes.py
     registry.py
@@ -53,6 +55,7 @@ nova/
   tests/
     test_agent_loop.py
     test_api.py
+    test_memory.py
     test_permissions.py
     test_validation.py
     test_powershell.py
@@ -98,7 +101,9 @@ nova/
 - `confirmation_details(tool_name, arguments, tier)` — human-readable prompt: action, actual operation, concrete impact, risk tier.
 - `request_confirmation(details)` — terminal stdin `[y/N]`, returns bool.
 - `execute_tool(tool_name, arguments, registry)` — pure executor; permission enforcement lives in the loop.
-- `READ_ONLY_TOOLS` set — tool names that auto-execute (all except `execute_powershell`).
+- `READ_ONLY_TOOLS` set — tool names that auto-execute (genuinely read-only).
+- `AUTO_APPROVE_TOOLS` set — `remember`/`forget`. Write to disk but skip the confirmation prompt, so they classify as READ. Kept separate from `READ_ONLY_TOOLS` so that set stays honest.
+- `MEMORY_TOOLS` set — refused outright while incognito mode is on; the loop checks this before risk classification.
 
 ## annotations.py
 - `is_execution_failure(tool_name, result)` — True if `execute_powershell` timed out or returned non-zero.
@@ -106,30 +111,52 @@ nova/
 - `annotate_result(result, annotation_type, attempt_count=None)` — adds `_recovery_note` (scaled by `MAX_COMMAND_RETRIES=2`) or `_verification_note` to a result dict for model guidance.
 
 ## prompts.py
-`SYSTEM_PROMPT` — compact numbered-rule system prompt (identity, personality, response length, user authority, 17 tool/system rules). Real current date/time is appended at runtime by `main.py` and `api/server.py`; never hardcode dates here.
+`SYSTEM_PROMPT` — compact numbered-rule system prompt (identity, personality, response length, user authority, 17 tool/system rules).
+
+- `build_system_prompt(incognito=False)` — composes `SYSTEM_PROMPT` + the memory block + the live date. Both `main.py` and `api/server.py` call this rather than assembling the prompt themselves. Returns the memory block only when memory is enabled, the session isn't incognito, and the store is non-empty, so an empty store leaves the prompt unchanged.
 
 ## tool_registry.py
-`TOOL_REGISTRY` — dict mapping each of the 14 tool names to its function reference.
+`TOOL_REGISTRY` — dict mapping each of the 16 tool names to its function reference.
+
+## memory.py
+Durable fact storage. `MEMORY_PATH` is `memory.json` at the project root (beside `settings.json`), gitignored. Reads and writes never raise: a missing or malformed file degrades to an empty store.
+
+- `load_entries()` / `save_entries(entries)` — tolerant read; save caps to the newest `MEMORY_MAX_ENTRIES` and never raises on `OSError`.
+- `remember(key, value, source="explicit")` — upsert by normalized key (case-insensitive, `snake_case`), preserving `created` and refreshing `updated`. Value clamped to `MEMORY_MAX_VALUE_CHARS`.
+- `forget(key)` — `{forgotten, key, remaining}` or `{forgotten: False, error, keys}`.
+- `list_entries()` — `{entries, count, max_entries}` result shape for `GET /memory`.
+- `render_memory_block(entries=None)` — the injected prompt section; `""` for an empty store.
+- `extract_candidate(text)` — True when a message matches `CAPTURE_TRIGGERS` (narrow: `from now on`, `remember that`, `call me`, `always`, `never`, …).
+- `should_capture(user_text, mode)` — the mode gate. `"always"` returns True unconditionally; `"trigger"` and any unrecognised mode fall back to `extract_candidate`.
+- `autocapture(user_text, assistant_text)` — one short LLM call with `tools=[]`, `think=False`, and `num_predict=384`, parsing a `{"facts": [...]}` reply. Holds its own `chat` reference so patching `agent.loop.chat` in tests can't redirect it. All failures swallowed, but every attempt is logged to `memory.log`. The `think=False` is mandatory: without it a hybrid reasoning model spends the entire budget thinking and returns zero characters.
+- `start_autocapture(user_text, assistant_text, mode="trigger")` — applies `should_capture`, then spawns `autocapture` on a `daemon` thread; returns False without spawning when the gate declines.
+- `_log(event, **fields)` — appends one diagnostic line to `memory.log`, capped at 256 KB. Never raises; a broken log path must not break a turn.
 
 ---
 
 # api/
 
 ## server.py
-FastAPI app bound to `127.0.0.1:8000`. `CONVERSATIONS` dict holds in-memory message history keyed by `conversation_id`. No persistence.
+FastAPI app bound to `127.0.0.1:8000`. `CONVERSATIONS` dict holds in-memory message history keyed by `conversation_id`. `INCOGNITO` is a set of conversation ids currently in incognito mode. No persistence of transcripts.
 
 - `GET /health` — `{"api": "ok", "ollama_reachable": bool}` (checks Ollama on localhost:11434 with `API_HEALTH_TIMEOUT`).
-- `POST /chat` — body `{message, conversation_id?}`. Creates/reuses a conversation (fresh system prompt with current date), streams NDJSON: first `{"type":"conversation_id","id":...}`, then each event from `run_turn_events`. `Content-Type: application/x-ndjson`.
+- `POST /chat` — body `{message, conversation_id?, incognito?}`. Creates/reuses a conversation (fresh system prompt with current date), streams NDJSON: `{"type":"conversation_id","id":...}`, then `{"type":"session_mode","incognito":bool}` on a fresh conversation or mode change, then each event from `run_turn_events`. Changing `incognito` for an existing conversation **rebuilds** it, because the memory block is baked into `messages[0]`. `Content-Type: application/x-ndjson`.
 - `POST /permission` — body `{conversation_id, approved}`. Resolves a pending permission request. Returns `{"ok": True, ...}` or `{"ok": False, "error": "No pending permission request."}`.
-- `GET /settings` — `{"values", "defaults", "ranges"}` from `settings.py`.
+- `GET /settings` — `{"values", "defaults", "ranges", "bools"}` from `settings.py`. `bools` lists boolean keys so the client renders checkboxes instead of text boxes.
 - `POST /settings` — body `{values: {...}}`. Validates + persists partial update. Returns `{"ok", "values", "rejected": [...], "restart_required": True}`.
+- `GET /memory` — `{entries, count, max_entries}`.
+- `DELETE /memory/{key}` — `{"ok": True, "deleted": {...}}` or `{"ok": False, "deleted": None, "error": ...}`.
 
 ---
 
 # tools/
 
 ## tool_schemas.py
-`TOOL_SCHEMAS` — list of OpenAI-style function schemas (`type: "function"`, `function: {name, description, parameters}`). Declarative metadata only; no executables. Descriptions are deliberately concise for small-model compatibility. **14 tools.**
+`TOOL_SCHEMAS` — list of OpenAI-style function schemas (`type: "function"`, `function: {name, description, parameters}`). Declarative metadata only; no executables. Descriptions are deliberately concise for small-model compatibility. **16 tools.**
+
+## memory.py
+- `remember(key, value)` — store or overwrite a durable user fact. Returns `{stored, updated_existing, entry: {key, value, source, created, updated}}`, or `{error, stored: False}` for an empty key/value.
+- `forget(key)` — remove a fact by key. Thin wrappers over `agent/memory.py`.
 
 ## filesystem.py
 - `search_files(pattern, root_path=None)` — PowerShell `Get-ChildItem -Recurse -Filter` over default roots (USERPROFILE, Program Files, Program Files x86) or a given root, with a time budget and `MAX_RESULTS` cap. Returns `{pattern, roots_searched, matches:[{path,size_mb}], count, truncated_by_time, truncated_by_count}`.

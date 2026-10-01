@@ -14,10 +14,14 @@
   const terminal1Button = document.getElementById("terminal-1-button");
   const terminal2Button = document.getElementById("terminal-2-button");
   const settingsButton = document.getElementById("settings-button");
+  const memoryButton = document.getElementById("memory-button");
+  const incognitoButton = document.getElementById("incognito-button");
+  const memoryList = document.getElementById("memory-list");
   const chatView = document.getElementById("chat-view");
   const terminal1View = document.getElementById("terminal-1-view");
   const terminal2View = document.getElementById("terminal-2-view");
   const settingsView = document.getElementById("settings-view");
+  const memoryView = document.getElementById("memory-view");
   const terminal1Container = document.getElementById("terminal-1-container");
   const terminal2Container = document.getElementById("terminal-2-container");
 
@@ -67,12 +71,16 @@
 
   const state = new ConversationState();
 
+  // Incognito is a client preference; the API treats it as authoritative per request.
+  let incognito = false;
+
   // View switching
   const views = {
     chat: chatView,
     terminal1: terminal1View,
     terminal2: terminal2View,
     settings: settingsView,
+    memory: memoryView,
   };
 
   const buttons = {
@@ -80,6 +88,7 @@
     terminal1: terminal1Button,
     terminal2: terminal2Button,
     settings: settingsButton,
+    memory: memoryButton,
   };
 
   // Switch active view and focus appropriate element
@@ -105,6 +114,10 @@
   settingsButton?.addEventListener("click", () => {
     switchView("settings");
     loadSettingsView();
+  });
+  memoryButton?.addEventListener("click", () => {
+    switchView("memory");
+    loadMemoryView();
   });
 
   switchView("chat");
@@ -304,6 +317,10 @@
       case "conversation_id":
         state.id = evt.id;
         break;
+      case "session_mode":
+        // The API is authoritative -- it rebuilds the conversation on a mode change.
+        setIncognito(Boolean(evt.incognito), { persist: false });
+        break;
       case "tool_started":
         addToolStarted(evt.name, evt.args, evt.tier, evt.display);
         break;
@@ -375,7 +392,7 @@
     input.disabled = true;
 
     const requestId = state.newRequest(text);
-    window.nova.send(text, requestId);
+    window.nova.send(text, requestId, incognito);
   });
 
   input.addEventListener("input", resizeInput);
@@ -389,6 +406,8 @@
   // Settings management
   let settingsLoaded = false;
   let lastAgentRanges = {};
+  let lastAgentBools = [];
+  let lastAgentChoices = {};
 
   // Build dynamic agent settings field
   function buildAgentSettingRow(key, label, input) {
@@ -406,23 +425,45 @@
 
   // Populate agent settings form from API response
   function renderAgentSettingsForm(payload) {
-    const { values, ranges } = payload;
+    const { values, ranges, bools, choices } = payload;
     const container = document.getElementById("agent-settings-fields");
     container.innerHTML = "";
+    const boolKeys = new Set(bools || []);
 
     for (const key of Object.keys(values)) {
       const isNumeric = Object.prototype.hasOwnProperty.call(ranges, key);
-      const input = document.createElement("input");
+      const isBool = boolKeys.has(key);
+      const options = choices ? choices[key] : null;
+      let input;
 
-      if (isNumeric) {
-        input.type = "number";
-        const [min, max] = ranges[key];
-        input.min = min;
-        input.max = max;
+      if (options && options.length) {
+        // Enumerated string: a dropdown keeps the user from typing a value
+        // the API will reject.
+        input = document.createElement("select");
+        for (const option of options) {
+          const opt = document.createElement("option");
+          opt.value = option;
+          opt.textContent = option;
+          input.appendChild(opt);
+        }
         input.value = values[key];
       } else {
-        input.type = "text";
-        input.value = values[key];
+        input = document.createElement("input");
+        if (isBool) {
+          // Bools must render as checkboxes -- a text box would let the API
+          // reject the value on save.
+          input.type = "checkbox";
+          input.checked = Boolean(values[key]);
+        } else if (isNumeric) {
+          input.type = "number";
+          const [min, max] = ranges[key];
+          input.min = min;
+          input.max = max;
+          input.value = values[key];
+        } else {
+          input.type = "text";
+          input.value = values[key];
+        }
       }
 
       container.appendChild(buildAgentSettingRow(key, key.replace(/_/g, " "), input));
@@ -440,11 +481,16 @@
   }
 
   // Collect agent settings from dynamic form
-  function collectAgentSettings(ranges) {
+  function collectAgentSettings(ranges, bools) {
     const out = {};
-    document.querySelectorAll("#agent-settings-section input[data-key]").forEach((input) => {
+    const boolKeys = new Set(bools || []);
+    document.querySelectorAll("#agent-settings-section [data-key]").forEach((input) => {
       const key = input.dataset.key;
-      if (Object.prototype.hasOwnProperty.call(ranges, key)) {
+      if (boolKeys.has(key)) {
+        out[key] = input.checked;
+      } else if (input.tagName === "SELECT") {
+        out[key] = input.value;
+      } else if (Object.prototype.hasOwnProperty.call(ranges, key)) {
         const num = parseInt(input.value, 10);
         if (!Number.isNaN(num)) out[key] = num;
       } else {
@@ -487,6 +533,8 @@
       const res = await window.nova.getAgentSettings();
       if (!res.ok) throw new Error(res.error || "unknown error");
       lastAgentRanges = res.result.ranges || {};
+      lastAgentBools = res.result.bools || [];
+      lastAgentChoices = res.result.choices || {};
       renderAgentSettingsForm(res.result);
     } catch (err) {
       document.getElementById("agent-settings-fields").innerHTML =
@@ -508,7 +556,7 @@
 
   // Save agent settings
   document.getElementById("agent-settings-save")?.addEventListener("click", async () => {
-    const values = collectAgentSettings(lastAgentRanges);
+    const values = collectAgentSettings(lastAgentRanges, lastAgentBools);
     setSettingsStatus("agent-settings-status", "Saving…", false);
     try {
       const res = await window.nova.saveAgentSettings(values);
@@ -537,6 +585,118 @@
       window.nova.hide();
     }
   });
+
+  // ---- Incognito mode ------------------------------------------------------
+
+  // Reflect incognito state in the sidebar button. Uses its own `on` class
+  // rather than `active`, which switchView() owns for view buttons.
+  function setIncognito(next, { persist = true } = {}) {
+    incognito = Boolean(next);
+    if (incognitoButton) {
+      incognitoButton.classList.toggle("on", incognito);
+      incognitoButton.setAttribute("aria-pressed", String(incognito));
+      incognitoButton.title = incognito
+        ? "Incognito mode is on -- nothing is being remembered"
+        : "Incognito mode -- nothing is remembered";
+    }
+    if (persist) {
+      // Persist so the mode survives a restart.
+      window.nova.saveSettings({ incognito }).catch(() => {});
+    }
+  }
+
+  incognitoButton?.addEventListener("click", () => {
+    setIncognito(!incognito);
+  });
+
+  // Seed from saved client settings.
+  window.nova.getSettings()
+    .then((saved) => {
+      if (saved && typeof saved.incognito === "boolean") {
+        setIncognito(saved.incognito, { persist: false });
+      }
+    })
+    .catch(() => {});
+
+  // ---- Memory view ---------------------------------------------------------
+
+  function renderMemoryList(entries) {
+    if (!memoryList) return;
+    memoryList.innerHTML = "";
+
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "settings-loading";
+      empty.textContent = "NOVA is not remembering anything yet.";
+      memoryList.appendChild(empty);
+      return;
+    }
+
+    entries.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "memory-item";
+
+      const text = document.createElement("div");
+      text.className = "memory-text";
+
+      const key = document.createElement("span");
+      key.className = "memory-key";
+      key.textContent = entry.key;
+
+      const value = document.createElement("span");
+      value.className = "memory-value";
+      value.textContent = entry.value;
+
+      const meta = document.createElement("span");
+      meta.className = "memory-meta";
+      const when = (entry.updated || entry.created || "").replace("T", " ");
+      meta.textContent = `${entry.source} · ${when}`;
+
+      text.appendChild(key);
+      text.appendChild(value);
+      text.appendChild(meta);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "memory-delete";
+      remove.textContent = "✕";
+      remove.title = `Forget ${entry.key}`;
+      remove.addEventListener("click", async () => {
+        remove.disabled = true;
+        const res = await window.nova.deleteMemory(entry.key);
+        if (!res || res.ok === false) {
+          remove.disabled = false;
+          addErrorLine(
+            `Could not forget ${entry.key}: ${(res && res.error) || "unknown error"}`
+          );
+          return;
+        }
+        loadMemoryView();
+      });
+
+      row.appendChild(text);
+      row.appendChild(remove);
+      memoryList.appendChild(row);
+    });
+  }
+
+  // Always refetched on open -- unlike the settings view, memory changes
+  // underneath the user as conversations happen.
+  async function loadMemoryView() {
+    if (!memoryList) return;
+    memoryList.innerHTML = '<p class="settings-loading">Loading…</p>';
+
+    const res = await window.nova.getMemory();
+    if (!res || res.ok === false) {
+      memoryList.innerHTML = "";
+      const failed = document.createElement("p");
+      failed.className = "settings-error";
+      failed.textContent = `Could not load memory: ${(res && res.error) || "unknown error"}`;
+      memoryList.appendChild(failed);
+      return;
+    }
+    renderMemoryList((res.result && res.result.entries) || []);
+  }
 
   // Start new conversation
   newConvoBtn.addEventListener("click", () => {

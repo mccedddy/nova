@@ -1,4 +1,5 @@
 from tools.filesystem import analyze_file_relevance, get_folder_size, search_files
+from tools.memory import forget, remember
 from tools.processes import get_network_connections, list_running_processes
 from tools.powershell import execute_powershell
 from tools.registry import list_installed_apps, query_registry
@@ -20,4 +21,6 @@ TOOL_REGISTRY = {
     "fetch_page": fetch_page,
     "get_approximate_location": get_approximate_location,
     "execute_powershell": execute_powershell,
+    "remember": remember,
+    "forget": forget,
 }

@@ -25,6 +25,22 @@ READ_ONLY_TOOLS = {
     "get_approximate_location",
 }
 
+# These touch disk and change state, but the write is scoped to NOVA's own
+# memory store and is trivially reversible, so they skip the confirmation
+# prompt. Kept separate from READ_ONLY_TOOLS so that set stays honest about
+# what it contains. Incognito mode is enforced in the agent loop, not here.
+AUTO_APPROVE_TOOLS = {
+    "remember",
+    "forget",
+}
+
+# Suppressed entirely while incognito mode is on. The loop checks this before
+# classification so the refusal is unambiguous and never becomes a prompt.
+MEMORY_TOOLS = {
+    "remember",
+    "forget",
+}
+
 DESTRUCTIVE_COMMAND_PATTERNS = (
     r"\bRemove-Item\b",
     r"\bRemove-Object\b",
@@ -93,7 +109,7 @@ def classify_operation(tool_name, arguments):
     """Classify a tool call without trusting model-supplied risk labels."""
     if tool_name == "execute_powershell":
         return classify_command(arguments.get("command", ""))
-    if tool_name in READ_ONLY_TOOLS:
+    if tool_name in READ_ONLY_TOOLS or tool_name in AUTO_APPROVE_TOOLS:
         return RiskTier.READ
     return RiskTier.DESTRUCTIVE
 

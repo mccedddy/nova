@@ -8,18 +8,24 @@ class OllamaUnavailableError(Exception):
     pass
 
 
-def chat(messages, tools=None, stream=False, timeout=OLLAMA_REQUEST_TIMEOUT):
+def chat(messages, tools=None, stream=False, timeout=OLLAMA_REQUEST_TIMEOUT, num_predict=None, think=None):
     payload = {
         "model": MODEL,
         "messages": messages,
         "stream": stream,
         "options": {
             "num_ctx": NUM_CTX,
-            "num_predict": NUM_PREDICT,
+            "num_predict": NUM_PREDICT if num_predict is None else num_predict,
         },
     }
     if tools:
         payload["tools"] = tools
+    # Only sent when explicitly requested, so the main agent's payload is
+    # unchanged. Memory extraction sets think=False: on hybrid reasoning models
+    # (qwen3.5 and similar) thinking otherwise consumes the entire num_predict
+    # budget and the reply comes back with zero characters.
+    if think is not None:
+        payload["think"] = think
 
     try:
         response = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
