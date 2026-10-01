@@ -1,20 +1,21 @@
-# NOVA — File Reference
+# NOVA — Codebase Map
 
-File-by-file API reference for the NOVA codebase. For conventions, run commands, and design decisions see `AGENTS.md`; this file covers signatures, arguments, and return shapes only.
+Where things live and what each piece is for. For conventions, run commands, and design decisions see **`AGENTS.md`**, which is the required reading for anyone working here — this file is only navigation.
 
-> **Trust the source.** This reference may drift from the code. When a detail here conflicts with what the code actually does, the code wins — read the source to be sure.
+> **This map deliberately carries no signatures, return shapes, or constant values.**
+> Those drift silently, and a confidently wrong signature is worse than none: an agent that trusts a stale `chat()` signature writes code that appears to work while quietly failing to disable model reasoning. Read the source for anything at call level. This file answers "where do I look?", not "what does it return?".
 
-## Architecture in one line
+## Architecture
 
-Three layers: the **Python agent core** (`agent/`, `tools/`) runs the ReAct tool-calling loop; the **Python API** (`api/server.py`) exposes it over HTTP as NDJSON events; the **Electron client** (`app/`) is a desktop UI that consumes the API and never runs Python tools directly.
+Three layers. The **Python agent core** (`agent/`, `tools/`) runs a ReAct tool-calling loop. The **Python API** (`api/server.py`) exposes that loop over HTTP as NDJSON event streams. The **Electron client** (`app/`) is a desktop UI that consumes the API and never runs Python tools directly — every tool action crosses the process boundary.
 
-**16 tools** are registered (`tools/tool_schemas.py`): system diagnostics, running processes, network connections, GPU driver info, disk health, registry query, installed apps, file search, folder size, file relevance, web search, page fetch, approximate location, dynamic PowerShell execution, and durable memory (`remember`/`forget`). All are READ-tier auto-execute except `execute_powershell`, whose risk is classified per-command.
+16 tools are registered. Permission tiers are enforced in Python, never by model self-report. `execute_powershell` is the only tool whose risk is classified per-invocation; everything else resolves from a static set lookup.
 
-**Permissions** (READ / MODIFY / DESTRUCTIVE-SYSTEM-LEVEL) are enforced in Python (`agent/permissions.py`), never by model self-report. MODIFY and DESTRUCTIVE require user confirmation.
+Conversations are **in-memory only**, keyed by `conversation_id`, with no persistence across restarts. `memory.json` is the single durable store.
 
 ---
 
-# File structure
+## File tree
 
 ```
 nova/
@@ -57,8 +58,8 @@ nova/
     test_api.py
     test_memory.py
     test_permissions.py
-    test_validation.py
     test_powershell.py
+    test_validation.py
     test_websearch.py
   docs/index.md
   requirements.txt
@@ -66,173 +67,135 @@ nova/
   README.md
 ```
 
----
-
-# agent/
-
-## client.py
-`OllamaUnavailableError` exception. Wraps Ollama's `/api/chat`.
-
-- `chat(messages, tools=None, stream=False, timeout=OLLAMA_REQUEST_TIMEOUT)` — POST to `OLLAMA_URL` with `model`, `messages`, `tools`, `num_ctx`/`num_predict`. Raises `OllamaUnavailableError` on connection/timeout/HTTP errors. Returns parsed JSON.
-- `extract_tool_calls(response_json)` — returns `[{"name", "arguments": {...}}]`. Handles string-encoded JSON arguments; on parse failure wraps args as `{"_raw": ...}`. Empty list if no tool calls.
-- `get_final_text(response_json)` — returns `message.content` (the model's plain-text answer).
-
-## loop.py
-`run_turn_core` is the shared event generator; `run_turn` (terminal) and `run_turn_events` (API) are separate thin wrappers (deliberately kept distinct).
-
-- `run_turn_core(user_input, messages, conversation_id=None, sync_confirm_callback=None)` — the ReAct loop: chat → extract tool calls → validate → classify risk → request permission if not READ → execute → annotate → repeat until answer or `MAX_ITERATIONS`. Yields events:
-  - `{"type": "tool_started", name, args, tier, display}`
-  - `{"type": "tool_finished", name, result, tier}`
-  - `{"type": "permission_requested", id, details}`
-  - `{"type": "answer", text}`
-  - `{"type": "error", text}`
-- `run_turn(user_input, messages, show_debug_tools=False, show_full_output=False)` — terminal interface; consumes events, prints progress, uses sync `request_confirmation`. Returns final text.
-- `run_turn_events(user_input, messages, conversation_id)` — API interface; yields all core events (consumed as NDJSON). Uses async `PermissionManager`.
-- `validate_tool_call(name, args, registry, schemas)` — checks registry membership, required args, and coercible scalar types. Returns `(ok, validated_args | error_message)`.
-- `format_tool_progress(tool_number, name, arguments)` — `"N. <description>"` via `TOOL_PROGRESS_MESSAGES`.
-- `resolve_permission(conversation_id, approved)` — resolves a pending async permission request.
-- `PermissionManager` — thread-safe async permission resolution keyed by `conversation_id`.
-
-## permissions.py
-`RiskTier` enum: `READ`, `MODIFY`, `DESTRUCTIVE` (displayed "DESTRUCTIVE/SYSTEM-LEVEL").
-
-- `classify_command(command)` — regex-classifies a PowerShell string. Order checked: DESTRUCTIVE patterns, MODIFY patterns, READ pattern, else **default MODIFY** (conservative).
-- `classify_operation(tool_name, arguments)` — `execute_powershell` → `classify_command`; names in `READ_ONLY_TOOLS` → READ; anything else → DESTRUCTIVE (safety default). Never trusts model-supplied labels.
-- `confirmation_details(tool_name, arguments, tier)` — human-readable prompt: action, actual operation, concrete impact, risk tier.
-- `request_confirmation(details)` — terminal stdin `[y/N]`, returns bool.
-- `execute_tool(tool_name, arguments, registry)` — pure executor; permission enforcement lives in the loop.
-- `READ_ONLY_TOOLS` set — tool names that auto-execute (genuinely read-only).
-- `AUTO_APPROVE_TOOLS` set — `remember`/`forget`. Write to disk but skip the confirmation prompt, so they classify as READ. Kept separate from `READ_ONLY_TOOLS` so that set stays honest.
-- `MEMORY_TOOLS` set — refused outright while incognito mode is on; the loop checks this before risk classification.
-
-## annotations.py
-- `is_execution_failure(tool_name, result)` — True if `execute_powershell` timed out or returned non-zero.
-- `needs_verification(tool_name, arguments)` — True if the operation tier is not READ.
-- `annotate_result(result, annotation_type, attempt_count=None)` — adds `_recovery_note` (scaled by `MAX_COMMAND_RETRIES=2`) or `_verification_note` to a result dict for model guidance.
-
-## prompts.py
-`SYSTEM_PROMPT` — compact numbered-rule system prompt (identity, personality, response length, user authority, 17 tool/system rules).
-
-- `build_system_prompt(incognito=False)` — composes `SYSTEM_PROMPT` + the memory block + the live date. Both `main.py` and `api/server.py` call this rather than assembling the prompt themselves. Returns the memory block only when memory is enabled, the session isn't incognito, and the store is non-empty, so an empty store leaves the prompt unchanged.
-
-## tool_registry.py
-`TOOL_REGISTRY` — dict mapping each of the 16 tool names to its function reference.
-
-## memory.py
-Durable fact storage. `MEMORY_PATH` is `memory.json` at the project root (beside `settings.json`), gitignored. Reads and writes never raise: a missing or malformed file degrades to an empty store.
-
-- `load_entries()` / `save_entries(entries)` — tolerant read; save caps to the newest `MEMORY_MAX_ENTRIES` and never raises on `OSError`.
-- `remember(key, value, source="explicit")` — upsert by normalized key (case-insensitive, `snake_case`), preserving `created` and refreshing `updated`. Value clamped to `MEMORY_MAX_VALUE_CHARS`.
-- `forget(key)` — `{forgotten, key, remaining}` or `{forgotten: False, error, keys}`.
-- `list_entries()` — `{entries, count, max_entries}` result shape for `GET /memory`.
-- `render_memory_block(entries=None)` — the injected prompt section; `""` for an empty store.
-- `extract_candidate(text)` — True when a message matches `CAPTURE_TRIGGERS` (narrow: `from now on`, `remember that`, `call me`, `always`, `never`, …).
-- `should_capture(user_text, mode)` — the mode gate. `"always"` returns True unconditionally; `"trigger"` and any unrecognised mode fall back to `extract_candidate`.
-- `autocapture(user_text, assistant_text)` — one short LLM call with `tools=[]`, `think=False`, and `num_predict=384`, parsing a `{"facts": [...]}` reply. Holds its own `chat` reference so patching `agent.loop.chat` in tests can't redirect it. All failures swallowed, but every attempt is logged to `memory.log`. The `think=False` is mandatory: without it a hybrid reasoning model spends the entire budget thinking and returns zero characters.
-- `start_autocapture(user_text, assistant_text, mode="trigger")` — applies `should_capture`, then spawns `autocapture` on a `daemon` thread; returns False without spawning when the gate declines.
-- `_log(event, **fields)` — appends one diagnostic line to `memory.log`, capped at 256 KB. Never raises; a broken log path must not break a turn.
+Two runtime artifacts sit at the project root and are gitignored: **`memory.json`** (durable user facts) and **`memory.log`** (autocapture diagnostics).
 
 ---
 
-# api/
+## agent/
 
-## server.py
-FastAPI app bound to `127.0.0.1:8000`. `CONVERSATIONS` dict holds in-memory message history keyed by `conversation_id`. `INCOGNITO` is a set of conversation ids currently in incognito mode. No persistence of transcripts.
+### client.py
+The only module that talks to Ollama. Wraps `/api/chat` and converts connection, timeout, and HTTP failures into `OllamaUnavailableError` so nothing downstream has to handle raw `requests` exceptions. Carries two optional knobs used by memory extraction — a token budget override and a reasoning toggle — both of which the main agent deliberately leaves unset.
 
-- `GET /health` — `{"api": "ok", "ollama_reachable": bool}` (checks Ollama on localhost:11434 with `API_HEALTH_TIMEOUT`).
-- `POST /chat` — body `{message, conversation_id?, incognito?}`. Creates/reuses a conversation (fresh system prompt with current date), streams NDJSON: `{"type":"conversation_id","id":...}`, then `{"type":"session_mode","incognito":bool}` on a fresh conversation or mode change, then each event from `run_turn_events`. Changing `incognito` for an existing conversation **rebuilds** it, because the memory block is baked into `messages[0]`. `Content-Type: application/x-ndjson`.
-- `POST /permission` — body `{conversation_id, approved}`. Resolves a pending permission request. Returns `{"ok": True, ...}` or `{"ok": False, "error": "No pending permission request."}`.
-- `GET /settings` — `{"values", "defaults", "ranges", "bools"}` from `settings.py`. `bools` lists boolean keys so the client renders checkboxes instead of text boxes.
-- `POST /settings` — body `{values: {...}}`. Validates + persists partial update. Returns `{"ok", "values", "rejected": [...], "restart_required": True}`.
-- `GET /memory` — `{entries, count, max_entries}`.
-- `DELETE /memory/{key}` — `{"ok": True, "deleted": {...}}` or `{"ok": False, "deleted": None, "error": ...}`.
+### loop.py
+The ReAct loop: chat, extract tool calls, validate, classify risk, request permission when required, execute, annotate, repeat until an answer or the iteration cap. Yields a fixed vocabulary of events that become NDJSON.
 
----
+Two entry points exist on purpose — one for the terminal, one for the API — both thin wrappers over a shared core. See `AGENTS.md` for why they were not merged back into one.
 
-# tools/
+Memory and incognito are enforced here, not in the prompt: a blocked memory tool never reaches the registry.
 
-## tool_schemas.py
-`TOOL_SCHEMAS` — list of OpenAI-style function schemas (`type: "function"`, `function: {name, description, parameters}`). Declarative metadata only; no executables. Descriptions are deliberately concise for small-model compatibility. **16 tools.**
+Adding a new event type requires a matching `case` in the Electron renderer; unhandled types render as a visible error line.
 
-## memory.py
-- `remember(key, value)` — store or overwrite a durable user fact. Returns `{stored, updated_existing, entry: {key, value, source, created, updated}}`, or `{error, stored: False}` for an empty key/value.
-- `forget(key)` — remove a fact by key. Thin wrappers over `agent/memory.py`.
+### permissions.py
+Risk classification, kept deliberately separate from any model self-report.
 
-## filesystem.py
-- `search_files(pattern, root_path=None)` — PowerShell `Get-ChildItem -Recurse -Filter` over default roots (USERPROFILE, Program Files, Program Files x86) or a given root, with a time budget and `MAX_RESULTS` cap. Returns `{pattern, roots_searched, matches:[{path,size_mb}], count, truncated_by_time, truncated_by_count}`.
-- `get_folder_size(path)` — recursive total size + top 10 immediate child items. Returns `{path, total_size_gb, largest_items:[{path,type,size_gb}], largest_items_truncated_by_time}` or `{error}`.
-- `analyze_file_relevance(path)` — pure-Python signals: `{path, days_since_accessed, days_since_modified, in_temp_or_cache_path, appears_locked_by_another_process, size_mb|"n/a (folder)"}`. Reports signals only — never a delete verdict.
-- `_default_roots()`, `_search_one_root(root, pattern, timeout)`, `_get_total_size(path, timeout)`, `_get_largest_items(path, timeout)`, `_check_if_locked(path)` — private helpers. `TEMP_CACHE_PATTERNS` is an extensible list.
+Three sets, with distinct meanings:
+- **`READ_ONLY_TOOLS`** — genuinely read-only tools.
+- **`AUTO_APPROVE_TOOLS`** — tools that write but should not prompt (`remember`/`forget`). Kept *separate* from the read-only set so that set stays honest about what it contains.
+- **`MEMORY_TOOLS`** — refused outright while incognito mode is on.
 
-## powershell.py
-- `execute_powershell(command, timeout=DEFAULT_TIMEOUT)` — runs wrapped commands with `$ErrorActionPreference='Stop'` in `-NoProfile -NonInteractive`. Timeout clamped to `[1, POWERSHELL_MAX_TIMEOUT]`. Returns `{command, stdout, stderr, returncode, timed_out}`. On timeout captures partial output; on missing PowerShell sets a clear stderr message.
+Tools in neither set fall to the most conservative tier. Recognized PowerShell commands are classified by regex; an unrecognized command lands on an intermediate default rather than the safest tier, which is intentional — see `AGENTS.md` before changing it.
 
-## processes.py
-- `list_running_processes(limit=30, sort_by="memory")` — psutil enumeration. Returns `{processes:[{pid,name,memory_mb,exe_path}], shown, total_running, truncated}`. Sorted by memory (default) or name.
-- `get_network_connections(limit=30)` — psutil `net_connections(kind="inet")`. ESTABLISHED sorted first; hard cap 40. Returns `{connections:[{pid,process_name,status,local_address,remote_address}], shown, total_connections, truncated}` or `{error, connections:[]}` (e.g. requires admin).
+### annotations.py
+Post-processing on tool results: attaches recovery notes to failed commands and verification notes to anything that wasn't read-only, scaled by a retry cap so the model isn't told the same thing repeatedly.
 
-## registry.py
-- `query_registry(key_path)` — reads a key via `winreg`. Allows only HKLM/HKCU/HKCR/HKU roots. Caps values at `REGISTRY_MAX_VALUES`, subkeys at `REGISTRY_MAX_SUBKEYS`. Returns `{key_path, values:[{name,value}], values_truncated, subkeys:[...], subkeys_truncated}` or `{error}`.
-- `list_installed_apps()` — scans HKLM + HKCU + WOW6432 uninstall paths. Returns `{apps:[{name,version,publisher,install_date}], count, errors}`. Deduped by name+version; sorted by name.
-- `_get_value`, `_read_values`, `_read_subkeys` — private helpers.
+### prompts.py
+The system prompt is **intentionally compact — numbered rules, not prose**, because it is consumed by a small local model. Do not pad it with explanation.
 
-## system.py
-- `get_system_diagnostics()` — `{cpu:{usage_percent,core_count_physical,core_count_logical}, ram:{total_gb,used_gb,percent_used}, disks:[{drive,total_gb,used_gb,free_gb,percent_used}], os:{name,version,build,uptime}}`. CPU/RAM/disk via psutil; OS info via PowerShell WMI.
-- `get_gpu_driver_info()` — `{gpus:[{name,driver_version,driver_date,vram_gb}]}`. WMI base, enriched for NVIDIA with `_try_nvidia_smi()` (accurate driver version + VRAM).
-- `get_disk_health()` — SMART via `Get-PhysicalDisk`. Returns per-disk `{device_id, friendly_name, media_type, health_status, operational_status, size}`; detects admin-required access-denied case.
-- `_try_nvidia_smi()` — single implementation; runs `nvidia-smi --query-gpu=driver_version,memory.total`, returns `{driver_version, vram_gb}` or `None` if nvidia-smi is unavailable.
+`build_system_prompt()` is the single composer. It injects the live date and, when appropriate, the memory block. Both the terminal and the API call it rather than assembling prompts themselves.
 
-## websearch.py
-Two-tier search; escalation logic lives in the tool, not the model.
+### tool_registry.py
+Maps tool names to callables. Kept as an explicit dict so an agent can see the full tool surface in one place.
 
-- `web_search(query)` — tier 1 tries DDG→Bing→Google backends (`BACKENDS`); escalates to tier 2 (`Ollama` web search API, needs `OLLAMA_API_KEY` from `.env`). Quality gate `_results_are_sufficient()` (≥3 unique URLs, ≥3 detailed snippets, low CVE-count noise). Returns `{query, backend_used, tier, escalated, results:[{title,snippet,url}], warning?|error?}`.
-- `fetch_page(url, max_chars=8000)` — `requests.get` + BeautifulSoup; strips script/style/nav/header/footer/aside/form; hard 20000-char ceiling. Returns `{url, content, truncated}` or `{url, error}`.
-- `get_approximate_location()` — IP geolocation via `ip-api.com`. Returns `{location, source}` ("ip_geolocation" or "default_fallback"). The only tool that sends the public IP externally.
+### memory.py
+Durable fact storage plus prompt injection plus background autocapture. Storage is tolerant by design: a missing or malformed file degrades to an empty store rather than breaking a conversation, and no read or write path raises.
+
+Autocapture runs on a daemon thread after the answer and never blocks a turn. Every failure is swallowed, and every attempt is logged — see the four `think=False` / reliability / logging bullets in `AGENTS.md` before changing anything here. The known-good reason it needs an explicit reasoning toggle is not obvious from the code and will look like removable cruft if undocumented.
 
 ---
 
-# app/
+## api/
 
-## main.js — Electron main process
-Window (frameless, transparent, always-on-top, ~640x460), tray, global shortcut (default `Alt+Space`), single-instance lock, API communication, IPC handlers, PTY terminals. Security: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
+### server.py
+FastAPI app bound to `127.0.0.1:8000` and never `0.0.0.0`; there is no authentication layer. Holds conversation history in memory and tracks per-conversation incognito state.
 
-- `checkHealth(baseUrl)`, `streamChat(baseUrl, message, conversationId, onEvent)` (reads NDJSON body), `respondToPermission(...)`, `getAgentSettings(baseUrl)`, `saveAgentSettings(...)`.
-- IPC channels: `nova:hide`, `nova:get-settings`, `nova:save-settings`, `nova:health`, `nova:permission`, `nova:send`, `nova:new-conversation`, `nova:get-agent-settings`, `nova:save-agent-settings`, and terminal channels.
-- Note: the blur-to-hide behavior in `createWindow` is currently **commented out**.
+Streaming is newline-delimited JSON. The first line identifies the conversation; a second line reports the resolved session mode when a conversation is new or its mode changed. Changing incognito mid-conversation **rebuilds** it, because the memory block is baked into the first message.
 
-## preload.js
-`contextBridge.exposeInMainWorld("nova", ...)` — narrow renderer-safe surface: `send`, `newConversation`, `hide`, `onEvent`, `onStreamEnd`, `onFocusInput`, `health`, `respondToPermission`, `getSettings`, `saveSettings`, `getAgentSettings`, `saveAgentSettings`, `terminalStart/Input/Resize/Kill`, `onTerminalData`, `onTerminalExit`.
-
-## renderer/index.html, renderer.js, style.css
-Single-page chat UI: sidebar (Chat / Terminal 1 / Terminal 2 / Settings / New Conversation / status dot), chat log with markdown rendering (marked), tier-colored tool indicators, Approve/Decline permission prompts, two xterm terminals, and settings view. App settings fields: **API base URL** and **global shortcut** only. Light theme active via `[data-theme]`; dark theme also defined in CSS. `renderer.js` handles events, permission flow, settings load/save, terminal binding, and 15s health polling.
-
-## settings.js
-Electron client settings stored as JSON in `userData`. **DEFAULTS: `{ apiBaseUrl: "http://127.0.0.1:8000", globalShortcut: "Alt+Space" }`.** Functions: `settingsPath()`, `loadSettings()` (merges defaults, falls back on missing/invalid), `saveSettings(settings)`.
-
-## terminals.js
-Two node-pty PowerShell PTYs (IDs 1 and 2, both start in `C:\DEV\nova`). `startTerminal`, `writeTerminal`, `resizeTerminal`, `killTerminal`, `killAllTerminals`. Activates the project venv if present; aims for UTF-8 output.
-
-## package.json
-Dependencies: `@xterm/xterm`, `marked`, `node-pty` (native — `npm rebuild node-pty` may be needed). Dev: `electron`, `electron-builder`.
+Settings endpoints serve both the Electron form and any other client: they separate boolean keys, ranged integers, and enumerated strings so a UI can render checkboxes, number inputs, and dropdowns instead of free text. Post-validating settings reports that a restart is required, because the Python constants snapshot at import.
 
 ---
 
-# Root
+## tools/
 
-## main.py
-Terminal CLI REPL. `main(show_debug_tools=False, show_full_output=False)` prints the banner, injects current date into the system prompt, loops on stdin calling `run_turn`. Handles `exit`/`quit`/EOF/Ctrl-C. `--debug-tools` shows raw tool calls; `--full-output` untruncates them (needs `--debug-tools`).
+One module per problem area, all thin and side-effect-free apart from `powershell.py`.
 
-## settings.py
-Loads and validates `settings.json` → exports module-level constants consumed everywhere. `DEFAULTS` + `INTEGER_RANGES` define allowed keys, types, and ranges; invalid values silently fall back to defaults. `save_settings(partial)` persists and returns `(merged, rejected)`. Enforces `powershell_max_timeout >= powershell_timeout`.
+### tool_schemas.py
+Declarative JSON function schemas — metadata only, no executables. Descriptions are kept short for small-model compatibility.
 
-## settings.json
-User-editable runtime config: model (`ollama_url`, `model`, `num_ctx`, `num_predict`), loop caps (`max_iterations`, `max_retries`), terminal truncation, PowerShell/filesystem/web/registry timeouts and limits, and internal tool timeout budgets.
+### memory.py
+The two model-facing memory tools. Thin wrappers over `agent/memory.py`; no logic of their own.
 
-## requirements.txt
-Python dependencies. Install with `pip install -r requirements.txt`.
+### filesystem.py
+File search, folder size, and a relevance *signals* analysis (recency, size, temp-path membership, lock state). The relevance tool deliberately reports signals and never renders a delete verdict — deletion is the user's decision, not the model's.
 
-## pytest.ini
-Sets `pythonpath = .` so imports resolve from the repo root.
+### powershell.py
+The dynamic-command tool. Wraps commands with strict error handling and profiles disabled, clamps the timeout, and returns partial output when it expires.
 
-## README.md
-Project front page (currently a stub).
+### processes.py
+Running processes and network connections via psutil, with hard result caps and a stable sort. Some information requires elevation and reports that as an error rather than returning partial data as if complete.
+
+### registry.py
+Windows registry reads restricted to the safe hive roots, with value and subkey caps.
+
+### system.py
+CPU, RAM, disk, OS, GPU driver, and SMART disk health. NVIDIA driver detail is enriched with `nvidia-smi` when available; the OS-specific paths shell out to PowerShell.
+
+### websearch.py
+Two-tier search where the escalation decision lives in the tool, not the model: free backends first, an API-backed tier only when the results fail a quality gate. Also page fetching and IP geolocation. The geolocation tool is the only one that sends anything externally.
+
+---
+
+## app/
+
+### main.js
+Electron main process: frameless always-on-top window, tray, global shortcut, single-instance lock, API communication, IPC handlers, and PTY terminals. Runs with `contextIsolation` enabled, `nodeIntegration` disabled, and the sandbox on — keep it that way.
+
+IPC channels cover window control, settings, health, chat streaming, permission responses, memory listing and deletion, conversation reset, and terminal I/O.
+
+### preload.js
+Exposes a narrow, renderer-safe surface on `window.nova` through `contextBridge`. The renderer has no direct Node access; anything the UI needs must be added here deliberately.
+
+### renderer/
+Single-page chat UI: sidebar navigation (Chat, terminals, Settings, Memory, and a persisted Incognito toggle), markdown-rendered chat log, tier-coloured tool indicators, inline permission prompts, embedded terminals, and a settings view. Agent settings render dynamically from what the API reports about key types.
+
+Any new NDJSON event type needs an explicit handler here or it surfaces as a red error line in the chat log.
+
+### settings.js
+Electron client settings, stored as JSON in `userData` and separate from `settings.json`. Includes the persisted `incognito` toggle alongside the API base URL and global shortcut. Loads defensively, falling back to defaults on a missing or invalid file.
+
+### terminals.js
+Two node-pty PowerShell terminals. Activates the project virtualenv when present and aims for UTF-8 output.
+
+### package.json
+`node-pty` is native and may need `npm rebuild node-pty` on Windows.
+
+---
+
+## Root
+
+### main.py
+Terminal REPL. Prints a banner, then loops on stdin driving the sync loop entry point. Debug flags surface raw tool names, arguments, and results.
+
+### settings.py
+Validates `settings.json` and re-exports it as module constants consumed everywhere. Declares defaults, integer ranges, boolean keys, and enumerated-string choices; invalid values silently fall back to defaults rather than raising. Also enforces the relationship between the two PowerShell timeouts.
+
+### settings.json
+User-editable runtime config: model connection and parameters, loop caps, terminal truncation, per-tool timeouts and limits, and the memory subsystem's four keys (`memory_enabled`, `memory_autocapture_mode`, `memory_max_entries`, `memory_max_value_chars`).
+
+### requirements.txt
+Python dependencies.
+
+### pytest.ini
+Puts the repo root on the import path so tests resolve project modules.
+
+### README.md
+Project front page and install/run instructions.
